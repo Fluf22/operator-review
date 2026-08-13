@@ -1,0 +1,7 @@
+node_modules
+dist
+app/node_modules
+app/dist
+app/.sessions
+.DS_Store
+.cursor
