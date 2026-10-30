@@ -1,0 +1,13 @@
+{
+  "name": "operator-review",
+  "private": true,
+  "type": "module",
+  "description": "Build an animated, evolving diagram walkthrough for reviewing one or several pull requests.",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@pierre/diffs": "^1.6.1",
+    "pele": "^1.8.0"
+  }
+}

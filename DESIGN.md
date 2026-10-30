@@ -1,6 +1,6 @@
 ---
 name: Operator Review
-description: Cursor-side PR visualizer. Chat interviews; this pane shows the current list, group, or diff.
+description: Static PR review walkthrough. Evolving diagrams, the diffs that prove them, and a notes overlay.
 colors:
   paper: "oklch(0.97 0.004 260)"
   paper-panel: "oklch(0.94 0.005 260)"
@@ -78,39 +78,39 @@ components:
 
 ## Overview
 
-A local visualizer that sits in Cursor's Simple Browser beside chat. Design serves the walk: inbox list, then diffs with a floating dock and a frosted notes overlay. Chrome matches Cursor: system UI font, compact rows, no cards, near black and white with a cool slate tint. Green and red belong to the diff only. Diff code is Fira Code with ligatures; file headers stay on the UI stack.
+A static local page, opened from `file://` in a browser tab or Cursor's Simple Browser. Design serves the walk: a sidebar of steps, an evolving diagram with the diffs that prove it below, a frosted notes overlay, and a floating dock. Chrome matches Cursor: system UI font, compact rows, no cards, near black and white with a cool slate tint. Diff code is Fira Code with ligatures; file headers stay on the UI stack.
 
-Physical scene: an engineer at a desk, this pane squeezed next to chat. Attention is on the conversation and the current hunk. Theme follows the system `prefers-color-scheme`: paper in light, ink in dark. Never `#fff` or `#000`. Pierre `themeType` tracks the same preference so syntax highlighting matches chrome.
+Physical scene: an engineer at a desk, reviewing one or several PRs at their own pace. Attention is on the current diagram and hunk. Theme follows `prefers-color-scheme` (paper in light, ink in dark) unless the reader forces Light or Dark with the theme switch. Never `#fff` or `#000`. Pierre diffs inherit the page's `color-scheme`, so syntax highlighting matches chrome.
 
 ## Colors
 
-Strategy: Restrained. Neutrals are cool slate (hue 260, chroma 0.004–0.008), Cursor black and white rather than a brand hue. Tokens use `light-dark()` so the page follows the OS. Selection, focus, You, and Send use graphite slate. Ochre is Stale, and a light ochre frost on **check** overlay cards. Brick is errors. Chrome never uses green: that color is reserved for diff additions. Pierre `--diffs-light-*` / `--diffs-dark-*` are `var(--paper)` / `var(--ink)`.
+Strategy: Restrained chrome, expressive diagrams. Neutrals are cool slate (hue 260, chroma 0.004–0.008), Cursor black and white rather than a brand hue. Tokens use `light-dark()`. Selection, focus and the line lens use graphite slate. Ochre marks open checks and questions, and tints **check** overlay cards. Brick is errors, BREAKING and change-requesting verdicts. Pierre `--diffs-light-*` / `--diffs-dark-*` are `var(--paper)` / `var(--ink)`.
+
+Diagram nodes are the one place chrome carries hue: `new` is blue, `risk` red, `fix` green with a dashed border, `gone` muted and dotted, each with its own light and dark shade. Elsewhere, green belongs to diff additions only.
 
 ## Typography
 
-Chrome uses the platform UI stack. 12px body, 11px labels, 13px titles. Tabular numbers for `#N`. Diff lines use Fira Code (400/500, `calt` + `liga`); headers inside the diff viewer stay system-ui. No Inter, no fluid clamp headings. Prose (empty states, errors) stays under 65ch.
+Chrome uses the platform UI stack. 12px body, 11px labels, 13px titles. Tabular numbers for step positions and counts. Diff lines use Fira Code (400/500, `calt` + `liga`); headers inside the diff viewer stay system-ui. No Inter, no fluid clamp headings.
 
 ## Elevation
 
-No shadows. Chrome stays matte except the floating walk surfaces (notes overlay, bottom dock, file-tree control), which share one frosted treatment (translucent panel + blur). Honor `prefers-reduced-transparency` with an opaque panel. Hierarchy is background steps (`ink` → `panel` → `raised`) and a 1px `line`. The titlebar and submit bar sit on `panel`. The inbox and diffs sit on `ink` (paper). Hover is `raised`, not a card.
+No shadows. Chrome stays matte except the floating walk surfaces (notes overlay, dock, substep picker), which share one frosted treatment (translucent panel + blur). Honor `prefers-reduced-transparency` with an opaque panel. Hierarchy is background steps (`ink` → `panel` → `raised`) and a 1px `line`. The sidebar sits on `panel`; the stage sits on `ink` (paper). Hover is `raised`, not a card.
 
 ## Components
 
-- **Titlebar** (inbox only): 11px "Review" plus muted scope. The walk uses the PR title row instead; do not stack both.
-- **Scope switch**: segmented, transparent, pressed state is `raised`. Not three marketing buttons.
-- **PR row**: explorer-style list row. Number muted until hover; title truncates. Tags are 11px words, not pills with heavy borders.
-- **Walk dock**: a floating bar at the bottom of the diffs (`‹` current group `›`). The middle control is the current step; click it for the other groups or Whole PR. Chevrons step prev/next. The dock hides while the file tree or comment popover is open.
-- **Walk notes**: a frosted overlay at the top-right of the diffs. First card is the group (or PR) summary. Then **explain** cards (what this hunk is in the PR) and **check** cards (a concern: look, then comment, fix, or own). Check cards use the same frost with a light ochre fill and border. The last card is always **Done! ✅**, with a control to open the next feature group (or Whole PR). Up/down steps cards, PATCHes `activeNote`, jumps to that hunk, and blinks it (slate wash, two pulses; a single fade when `prefers-reduced-motion`). Stepping does not open the line-comment input. Footer shows Open / Owned / Waived only on checks, plus how many checks are left. Minimize collapses it to a 40px icon. A skip-to-start control left of minimize returns to the summary card. Not a second chat. Stepping is not a decision.
-- **File tree**: Pierre FileTree of the current group's files. Click a file to jump to that diff. Wide: sidebar. Narrow: hidden until a bottom-right control opens a floating panel.
-- **Comment popover** (narrow): appears when lines are selected. Save draft or click outside / Escape to clear the selection.
-- **Submit bar**: status-bar density. Primary Send appears only when `readyToSubmit`, and stays disabled while check cards are open. **Waive remaining** is the explicit skip. Wide also holds the draft field.
+- **Sidebar head**: storyboard title (13px) and muted subtitle, then a small outlined **Open PR #N ↗** button (11px, hairline border, raised on hover) for the current step's PR, with the theme switch (System → Light → Dark) at the right. On narrow widths it is the only part of the sidebar left.
+- **Step rows**: explorer-style list. Step rows show number, kicker and title, with the verdict as an 11px word underneath. Substep rows are muted until seen or active, show their open count in ochre, and end with one 5px circle per card (mid grey; the current card's circle is darker in light mode, lighter in dark).
+- **Ledger**: status-bar density at the sidebar foot: open and to-review counts, and **Reset**.
+- **Stage**: the diagram on top (reserving room for the overlay on wide screens), the legend as 11px words with swatches, then the Pierre diffs for the substep.
+- **Walk notes**: a frosted overlay at the top-right of the stage. First card is the substep summary (title, body, BREAKING). Then **explain** cards (what this hunk is in the PR), **check** cards (a concern, ochre-tinted), **question** cards (a decision for the reviewer), and no done card: the next arrow goes straight to the next substep, and past the last card, to the review list. Checks and questions carry two quiet buttons, **Safe** and **Review**; the pressed one fills (slate for Safe, ochre for Review). A pen button in the header (or `n`) opens a note box at the foot of any card: a plain textarea that saves as you type. A saved note sits there as a quote with a slate left bar. Arrows and the dock step cards; a card with a line scrolls to it, blinks it (slate wash, two pulses; a single fade when `prefers-reduced-motion`) and keeps a slate bar on it; a card with a node dims the rest of the diagram. Minimize collapses it to a 40px icon. Not a second chat.
+- **Review list**: replaces the diagram, diffs and overlay in the stage. An 860px column of flat rows under Your notes, To review, Still open (when any) and Safe headings (11px caps with counts), divided by hairlines and not boxed. Each row has a kind tag, the substep as a jump link, the text, a muted detail, and a foot with the monospace GitHub line link and the Safe/Review buttons. Note rows quote the note with a slate left bar and add Edit; only notes on checks and questions carry a link and the buttons.
+- **Walk dock**: a floating bar at the bottom of the stage (`‹` current substep `›`). The middle control opens a picker of every substep, grouped by step.
 
 ## Do's and Don'ts
 
-**Do** keep one job per width: list, or groups, or the current diff.
-**Do** copy `#N` on click; do not navigate away.
-**Do** use slate only for current selection, focus, You, and Send.
-**Don't** use green in chrome. Additions already own that color.
+**Do** keep the reviewer in control: no autoplay, every move is a keypress or click.
+**Do** use slate only for current selection, focus and the line lens.
+**Don't** use green in chrome outside diagram fix nodes. Additions own that color.
 **Don't** restore GitHub PR chrome (tabs, conversation widgets, review timelines).
 **Don't** use cards, hero metrics, gradient text, or side-stripe accents.
-**Don't** add a second chat pane. Walk notes explain and flag; they do not interview.
+**Don't** turn the overlay into a quiz. Notes explain and flag; questions ask for a decision, not a known answer.

@@ -1,267 +1,93 @@
 ---
 name: operator-review
+description: Builds a local PR review walkthrough where Mermaid diagrams evolve step by step (before → change → review finding → suggested fix), rendered with Pele, with Pierre diffs under each diagram, explain/check notes anchored to diff lines, and a few reviewer questions. Handles one PR (steps are areas of the change) or several PRs (one step per PR, in stack or merge order). Use when the user says /operator-review, or wants to review, explain or present pull requests through evolving or animated diagrams, a storyboard, a slide-like walkthrough, or mentions pele.run. For a single static diagram to embed in a PR description, use pr-lens instead.
 disable-model-invocation: true
-description: >-
-  Run a human operator's GitHub PR review session. Opens a local Pierre inbox
-  (current branch → repo → org/account), walks comments then feature-grouped diffs,
-  and keeps draft review comments for one-click submit. Use when the
-  user is assigned to review, says /operator-review, review-work, review inbox,
-  review walk, or wants to walk PRs they author, are assigned to, were asked to
-  review, or already reviewed.
 ---
 
-# Operator Review
+# Operator review
 
-Copilot for **you** reviewing GitHub PRs. The app visualizes (inbox, Pierre diffs, overlay, drafts, Send). This skill **sets up the walk** (feature groups, explain/check cards) and then stays quiet. The operator reviews in the pane. They use this chat when they want more context or help drafting a comment. Do not run grill-me. Do not PATCH `grill`. Do not render questions or options in the app.
+The output is one static local page, styled per [DESIGN.md](DESIGN.md). Each **step** is a row in the sidebar, and each **substep** is one diagram, optionally with the diffs that prove it. Pele renders the diagram and the page animates it in: unchanged nodes first, then tagged nodes, each edge drawing once both ends are visible. `new` nodes are blue, `risk` red and `fix` green. After the entrance, `new` nodes glow once, `risk` nodes pulse, `fix` nodes get marching borders, and edges into new code and fixes flow.
 
-Explain cards are orientation. Check cards flag sensitive or buggy-looking bits. Overlay clicks move the lens; they do not record a decision. Send is blocked while check cards remain open (`verdicts[id]=judged` when they own it or you captured a draft, or `waived`).
+A frosted overlay walks each substep: the summary, then **explain** and **check** notes that jump to and flash their diff lines and highlight their diagram node, then a few **questions** for the reviewer. There is no done card: the next card is the next substep's summary. The reviewer marks each check and question **Safe** (they own it: minor, or fixed later) or **Review** (they want to think it over). After the last substep, Next opens the **review list**: every item to review or still open, each linked to its line (or file) in the PR's GitHub diff so the reviewer can comment there. On any card, `n` opens a note box; the list shows every note first, with its card's context and, for checks and questions, its link. Marks and notes stay in the browser. The only write is the review list's **Publish pending review** button, which asks a local helper (`scripts/publish-review.mjs`) to create a PENDING review on GitHub from the Review items and notes, after a confirmation. It never submits: only you can see the pending review until you submit it on GitHub.
 
-You never silent-post a GitHub review. The operator hits Send in the app.
-
-Do not use `pr-review-canvas` in this flow.
-
-## Layout
-
-Skill root: `~/.agents/skills/operator-review/`
-
-- `SKILL.md` — this file
-- `app/` — Vite + React companion (`@pierre/trees`, `@pierre/diffs`)
-- Session API: [app/API.md](app/API.md)
-
-Port **4310**, bind **127.0.0.1**. Override app path with `OPERATOR_REVIEW_APP`.
-
-## Host permissions (required)
-
-`gh` reads the OS keyring. `curl` talks to `127.0.0.1`. Both **fail inside the Cursor sandbox** (invalid token / health `000`).
-
-For every `gh`, `curl`, `npm install`, and `npm run dev` in this skill, run the Shell tool **outside the sandbox**: `required_permissions: ["all"]`. If a sandboxed attempt fails, retry the same command with `all` immediately. Do not ask the operator to re-auth until `gh auth status` has been run with `all`.
+Skill root: `~/.agents/skills/operator-review/`. Data schema, diagram rules and note rules: [reference.md](reference.md). Worked examples: [examples/single-pr.mjs](examples/single-pr.mjs) (one PR, with diffs, notes and questions) and [examples/multi-pr-stack.mjs](examples/multi-pr-stack.mjs) (five stacked PRs, diagrams only). Read the single-PR example before writing the first storyboard.
 
 ## Workflow
 
 ```
-- [ ] 1. Preflight (gh auth, infer cwd repo/branch)
-- [ ] 2. Ensure app is running
-- [ ] 3. POST /api/session (seed)
-- [ ] 4. Open http://127.0.0.1:4310/?session=<id> in the Cursor browser
-- [ ] 5. After the walk is seeded, stay quiet; answer in chat only when they ask
-- [ ] 6. Comments-first if threads exist, else logical-group diff walk
-- [ ] 7. Operator reviews drafts in-app and Sends (or skips)
-- [ ] 8. Ask “next is #N — continue?” (recommend yes) or stop
+- [ ] 1. Resolve the PRs and their order
+- [ ] 2. Save and read each diff (and any review findings already in the conversation)
+- [ ] 3. Plan the steps, substeps, notes and questions
+- [ ] 4. Write the storyboard module
+- [ ] 5. Build: validate, fix, emit
+- [ ] 6. Open it and check it in a tab you own
 ```
 
-### 1. Preflight
+### 1. Resolve the PRs
+
+Run `gh` outside the sandbox, because it reads the OS keyring.
 
 ```bash
-gh auth status
+gh pr view <n> --repo <owner/repo> --json number,title,url,baseRefName,headRefName,headRefOid,files
 ```
 
-If unauthenticated, stop: they must `gh auth login`.
+- **One PR**: the steps are areas of the change. Use 3–5 areas, grouped by feature or intent, not by folder.
+- **Several PRs**: one step per PR. When one PR's `baseRefName` is another's `headRefName`, they're stacked; order them base first. Otherwise use the order the user gave.
 
-Infer context from the **operator's** cwd (the repo they were in when they invoked you), not from this skill directory:
+Never check out PR branches in the user's tree.
+
+### 2. Save and read the diffs
+
+Pick a work folder outside the repo (or a gitignored one) for the module and its diffs, and save each PR's own diff there:
 
 ```bash
-git -C "$OPERATOR_CWD" rev-parse --is-inside-work-tree
-gh -C "$OPERATOR_CWD" repo view --json nameWithOwner,owner -q '{repo:.nameWithOwner,owner:.owner.login}'
-git -C "$OPERATOR_CWD" branch --show-current
+WORK=~/.cache/operator-review-src/<slug>; mkdir -p "$WORK"
+gh pr diff <n> --repo <owner/repo> > "$WORK/<n>.diff"
 ```
 
-- Inside a git repo with a GitHub remote → default `scope: "repo"` and include `branch` so the app can put the current-branch PR first.
-- Home / no git / no GitHub remote → `scope: "account"`. Do not guess a repo.
+Read enough code to name the real functions, files, env vars and data that changed. Labels must be real identifiers, not invented ones. Note line numbers from the new side of each hunk: notes must point at lines the shown patch contains, and the build checks it. If the conversation already holds review findings, such as a thermo-nuclear or censor review, they become the `risk`/`fix` substeps and their check notes. Prefer stack-aware conclusions: a change that looks unjustified in one PR may be used by the next.
 
-### 2. Ensure the app is running
+### 3. Plan the storyboard
+
+For each step, tell a short story in 2–4 substeps:
+
+1. **Before**: the existing flow the PR touches. All nodes untagged, usually no files.
+2. **After**: the same flow, with added or changed nodes tagged `:::new` and removed ones `:::gone`. Attach the 1–3 files that implement it, plus a few explain notes.
+3. **Review** (when there are findings): the problem tagged `:::risk`, the remedy `:::fix`. Attach the offending hunk, a check note per finding (linked to its `:::risk` node), and up to three questions.
+4. **Deploy** (only if real): config, migrations or queue ordering, tagged `:::risk`.
+
+Substeps within a step should evolve: reuse node ids and labels between "Before" and "After", so the reader sees the same shape change. Use one diagram for one idea, with at most about 12 nodes. Note and question rules are in [reference.md](reference.md#diffs-notes-and-questions); in short, few explains, checks only where you'd comment, questions only for decisions the diff can't settle.
+
+Put breaking changes in the substep's `breaking` array; they render under a **BREAKING** heading. Set `verdict` on a step only when a review verdict exists.
+
+### 4. Write the module
+
+Write `$WORK/<slug>.mjs` as `export default { title, subtitle, url, steps }`; see [reference.md](reference.md). Set the PR `url` on the board (one PR) or on each step (several PRs): the sidebar's Open PR button and the review list's GitHub line links come from it. Use template literals for diagrams, and `diff: './<n>.diff'` with `lines: [start, end]` for files.
+
+### 5. Build
 
 ```bash
-APP="${OPERATOR_REVIEW_APP:-$HOME/.agents/skills/operator-review/app}"
-curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:4310/api/health
+SKILL=~/.agents/skills/operator-review
+[ -d "$SKILL/node_modules/@pierre/diffs" ] || npm install --prefix "$SKILL"
+node "$SKILL/scripts/build.mjs" "$WORK/<slug>.mjs"            # → ~/.cache/operator-review/<slug>/index.html
+node "$SKILL/scripts/build.mjs" "$WORK/<slug>.mjs" --out dir  # custom output folder
+node "$SKILL/scripts/build.mjs" "$WORK/<slug>.mjs" --check    # validate only
 ```
 
-- `200` → reuse.
-- Else, from `$APP`: `npm install` if `node_modules` is missing, then `npm run dev` backgrounded (port 4310, host 127.0.0.1). Wait until `/api/health` is 200. If 4310 is taken by something else, stop and say so.
+The build renders every diagram with Pele and every diff with Pierre's SSR in Node. It fails on parse errors, unknown classes, node ids containing `_`, missing fields, files missing from the saved diff, notes or questions pointing at a file, line or node the substep doesn't show, and checks without a concern. It warns about a missing GitHub PR url, oversized diagrams, long patches and too many notes or questions. Fix every error and warning, then build again. Don't delete content to get past a failure.
 
-### 3. Seed the session
+The output folder is self-contained (`index.html`, `storyboard.js`, `pele.global.js`) and works from `file://`.
 
-`POST http://127.0.0.1:4310/api/session` with JSON (see [app/API.md](app/API.md)). Minimal:
+### 6. Open and check
 
-```json
-{
-  "scope": "repo",
-  "repo": "owner/name",
-  "branch": "feat/foo",
-  "mode": "inbox"
-}
+```bash
+open ~/.cache/operator-review/<slug>/index.html
 ```
 
-- `prs: [123, 456]` if they already named PRs.
-- `mode: "comments-first"` only when you already know the target PR has review threads.
-- `seed` can hold free-form notes from this chat.
+If browser tooling is available, check it in a **new tab you open yourself**, then close that tab. Never drive a tab the user is watching: your clicks and reloads move their position and look like bugs to them. Use one in-page script to check that every substep renders without an `.error` element and that every `.file` host has `[data-line]` rows in its shadow root, then screenshot one review substep with a check card open. Clear the slug's `operator-review:<slug>` and `operator-review:<slug>:notes` keys from `localStorage` when you're done, so your test marks and notes don't reach the user.
 
-Save the returned `id`.
+Tell the user the path; the number of steps, substeps, checks and questions; and the controls: ← → and ↑ ↓ (and the dock arrows) move one card, crossing into the next substep (→ past the last card opens the review list), the sidebar shows a circle per card, `s` marks a check or question Safe and `r` marks it Review, `n` writes a note on the current card for the review list (Esc closes it), keys 1–9 jump to a step, `p` replays the animation, `t` cycles the theme (system, light, dark), and `#step.substep` (or `#list`) in the URL deep-links.
 
-### 4. Open the browser
+## Updating a storyboard
 
-Open `http://127.0.0.1:4310/?session=<id>` in the Cursor Simple Browser (in-app browser / `open_resource` with that http URI). Do not dump the inbox in chat — the app owns it.
-
-The conversation controls the page by **PATCH** (SSE, no reload). The app mirrors the walk onto the URL:
-
-`http://127.0.0.1:4310/?session=<id>&pr=6731&group=async-batch&note=n1`
-
-Optional: `&path=file&line=12`. Opening that URL also works (full navigation). Prefer PATCH after the tab is open; do not reopen the browser unless it is on a different session.
-
-### 5. The pane leads; chat is on demand
-
-Do **not** read or follow `grill-me`. Do not quiz. Do not narrate every card. Do not nudge each check unprompted.
-
-After you PATCH groups + notes, tell them the walk is ready in **one short sentence**, then stop. They review in the overlay (explain vs check). They come back to this chat when they want:
-
-- more context on what is on screen
-- whether something is actually a bug
-- help drafting a review comment
-
-When they do ask:
-
-1. `GET /api/session/:id` and talk about `activeNote` (the lens), unless they named a different hunk.
-2. If you jump the pane, PATCH `activeGroup` + `activeNote` + `focus` **before** explaining.
-3. If they want a comment, draft it via `POST /api/session/:id/drafts` (and `PATCH` `verdicts: { "<check-id>": "judged" }` when it is a check). If they say they own a check with no comment, mark it judged too.
-
-Inbox clicks **copy `#N`** — they do not open the walk. Open the visualizer walk only after they paste a number in **this chat**, then PATCH `currentPr` / `mode`.
-
-Never PATCH `grill`. Never long-poll the app.
-
-Other PATCH fields: `currentPr`, `mode`, `prs`, `groups`, `brief`, `notes`, `readyToSubmit`.
-
-### 6. Walk a PR
-
-When they pick a PR (in chat: a number they pasted, a list, or “everything in sequence”):
-
-1. `PATCH` `{ "currentPr", "prs", "mode", "readyToSubmit": false }`.
-2. Fetch threads: `gh api repos/{owner}/{repo}/pulls/{n}/comments` and issue comments.
-3. **Comments-first** if any review comments exist (or tags New comments / New commits). Threads are in the pane. PATCH `focus.commentId` when they pick one or ask about it. Capture intended replies as drafts via `POST /api/session/:id/drafts` when they want help writing.
-4. **Diff walk** otherwise, and after threads. Cluster files by **feature / intent**, not by path prefix or file type. PATCH `groups` + `activeGroup`. They can say “show the whole PR” → `activeGroup: null`.
-5. Mechanical leftovers (lockfile, generated-only, `.gitignore`) last, and only as their own group if they are not part of a feature.
-
-#### How to group
-
-A group is one feature the operator can understand as a unit: “the async helpers,” “the concurrency knob.” Files that implement the same change belong together even if they live in different folders (template + runtime + tests for that helper).
-
-Do **not**:
-
-- Make a group per file
-- Make a group per directory (`templates/`, `src/`, `tests/`) unless that directory *is* the feature
-- Split a feature from its tests unless the tests are a separate review question (new fixture infra, unrelated coverage)
-- Invent extra steps for a 1–2 file PR that is already one feature. Still PATCH **one** group with a `why` so the helper can explain; do not split it.
-
-Do:
-
-- Name the group after the feature (2–5 words): `Async batch helpers`, not `templates` or `ApiClient.java`
-- Always set `why`: one or two sentences for the overlay summary of this slice. Not a file list. Not a restatement of the PR title.
-- PATCH every group with `id`, `label`, `why`, `paths`
-- `paths` are exact `filename` values from `GET /api/pr/:n` (or `gh pr view N --json files`). Never globs, prefixes, or `...`
-
-```json
-{
-  "brief": "Adds async chunked-batch helpers to the Java client. Sync wrappers await the same core; concurrency is opt-in.",
-  "groups": [
-    {
-      "id": "async-batch",
-      "label": "Async batch helpers",
-      "why": "chunkedBatchAsync and friends; sync wrappers await the same core so sequential v4 behavior stays the default.",
-      "paths": [
-        "templates/java/async_batch_helpers.mustache",
-        "templates/java/api_helpers.mustache",
-        "tests/output/java/src/test/java/com/algolia/manual/AsyncBatchHelpersTest.java"
-      ]
-    }
-  ],
-  "activeGroup": "async-batch",
-  "activeNote": "n-async-core",
-  "notes": [
-    {
-      "id": "n-async-core",
-      "kind": "explain",
-      "group": "async-batch",
-      "path": "templates/java/async_batch_helpers.mustache",
-      "line": 30,
-      "body": "New async helpers share one thenCompose chain. Sync wrappers await that core."
-    },
-    {
-      "id": "n-conc-cap",
-      "kind": "check",
-      "group": "concurrency",
-      "path": "clients/algoliasearch-client-java/algoliasearch/src/main/java/com/algolia/utils/ChunkedHelperOptions.java",
-      "line": 61,
-      "body": "setMaxConcurrency only rejects values below 1.",
-      "concern": "No upper cap. The default pool is unbounded — a caller can explode in-flight /batch calls."
-    },
-    {
-      "id": "n-gitignore",
-      "kind": "explain",
-      "group": "gitignore",
-      "path": ".gitignore",
-      "line": 60,
-      "body": "Unrelated mechanical leftover.",
-      "glance": true
-    }
-  ]
-}
-```
-
-#### Walk notes (overlay)
-
-Two card kinds. PATCH `brief` and `notes`. Drive with `activeNote`: `"summary"` | note `id` | `"done"`.
-
-Each note:
-
-- `id`, `group`, `path` + `line` (exact filename, a real line in that file’s patch)
-- `kind`: `"explain"` (orientation) or `"check"` (look and decide)
-- `body`: 1–2 sentences on what this hunk does in the PR
-- `concern` (check only): the sensitive bit or suspected bug — a flag, not a quiz
-- `glance: true` for trivia. Glance notes are not in the ledger.
-
-Prefer a few explain cards so they understand the feature, and **only** check cards where you would actually want a review comment or an explicit “I own this.” Do not turn every hunk into a check.
-
-Do not PATCH `grill`. Overlay clicks move `activeNote` / `focus` only. PATCH `verdicts: { "<id>": "judged" }` when they own a check or you captured a draft for it.
-
-### 7. Submit lives in the app (end of walk only)
-
-When comments-first + every **check** is owned or waived, `PATCH { "readyToSubmit": true }`. Only then does the app show Comment / Approve / Request changes and Send.
-
-Send stays **blocked** while check cards are open (UI and POST `/submit`). They can **Waive remaining** in the submit bar — that is an explicit skip. Mention open checks before you set `readyToSubmit`.
-
-Do not `gh pr review` yourself unless they explicitly ask you to submit from chat.
-
-If they want a draft summary, PATCH `summary` and `event` so the end screen is prefilled.
-
-### 8. Queue
-
-After they submit, skip, or say they’re done with this PR, ask: **next is #N — continue?** Recommend yes. If yes, PATCH `currentPr` to the next in `prs` (or the next inbox row they named) and repeat from step 6. If the queue is empty, return them to the inbox (`mode: "inbox"`, `currentPr: null`).
-
-## Inbox rules (app enforces; you must not contradict)
-
-Proximity sections, closest first:
-
-1. Current branch (open PR for HEAD, if any)
-2. Rest of current repo (de-dupe the branch PR)
-3. Show more → org **or** account (operator picks in the app)
-
-Involved in: **author ∪ assignee ∪ review-requested ∪ reviewed-by**. Not comment-only / mentioned-only.
-
-Tags on the inbox list (from `gh search` only — no per-PR API): **You**, **Waiting** (still in review-requested), **Stale** (`updatedAt` ≥ 7 days). **New commits** / **New comments** are decided when walking a PR, not on first inbox load.
-
-Bots (login ends with `[bot]`, or `renovate`, `dependabot`, `github-actions`) sort to the **bottom** of each list behind a **Bots** separator. Not a tag.
-
-Draft PRs: exclude.
-
-## What not to do
-
-- Do not PATCH `grill`, show grill-me UI, or quiz the operator. The pane leads; chat answers when they ask.
-- Do not narrate or nudge every card. After seeding the walk, one short “ready” line, then stop.
-- Do not discuss a hunk they asked about without PATCHing `activeGroup` + `activeNote` + `focus` first (unless it is already the lens).
-- Do not treat overlay/dock clicks as owning a check. They move the lens.
-- Do not set `readyToSubmit` while check cards are open unless they are about to waive.
-- Do not turn every hunk into a check. Checks are for sensitive or buggy-looking code only.
-- Do not group the walk by file or folder. Group by feature and always include `why`.
-- Do not check out the PR branch (hostile to the operator’s tree).
-- Do not re-render the inbox as a markdown table in chat.
-- Do not wait on app clicks. They review in the pane; they type here when they want help.
-- Do not post the GitHub review unless they ask you to from chat.
-- Do not use Cursor canvas or `pr-review-canvas` HTML for this skill.
+Edit the module and rebuild into the same folder, then the user reloads. When a review finding changes, for example after a deeper look downgrades it, update its substep's tags, check note and `body` so the page doesn't keep showing a stale blocker. Marks are keyed by note or question position and the reviewer's own notes by card position, so after adding, removing or reordering notes or questions tell the user to press **Reset**, and that their notes may now sit on a neighboring card.

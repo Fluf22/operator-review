@@ -1,0 +1,272 @@
+diff --git a/apps/cortex/README.md b/apps/cortex/README.md
+index 6bcce39..6e38028 100644
+--- a/apps/cortex/README.md
++++ b/apps/cortex/README.md
+@@ -105,15 +105,23 @@ overwritten, so every reader sees the first snapshot, and `markCompleted` only
+ writes `completion.json` once it exists.
+ 
+ The lookup tries the Gong account id, the participants' Contact ids, the App ID,
+-Contacts and Leads by customer email, then the email domain. One account is
+-`found`, several are `ambiguous`, none is `unresolved`; all three are results,
+-and every call logs `{ operation: 'enrich_account', outcome }` with the job id,
+-where `outcome` is `resolved` or `unresolved`.
++Contacts and Leads by customer email, then the email domain. A domain can match
++several accounts, such as a group's brands that all list its website; when the
++source names the account, the one account with that name is `found` by
++`domain-and-name`, comparing names without case, accents or punctuation. The
++source's name is tried whole, leaving out the URL of a link pasted into it, then
++without its text in parentheses, such as the form's Salesforce id; an account's
++text in parentheses always counts, so `Northwind (US)` never matches
++`Northwind (EMEA)`. One account is `found`, several are `ambiguous`, none is
++`unresolved`; all three are results, and every call logs
++`{ operation: 'enrich_account', outcome }` with the job id, where `outcome` is
++`resolved` or `unresolved`.
+ 
+ A Slack thread has no CRM context: the lookup gets the Salesforce Account id
+-written in the form's Customer Account Name, when there is one, and the customer
+-email. Forms posted before 2026-07-16 carry neither, so their threads come back
+-unresolved.
++written in the form's Customer Account Name, when there is one, the customer
++email, and the Customer Account Name itself to pick among the accounts on the
++email's domain. Forms posted before 2026-07-16 carry none of them, so their
++threads come back unresolved.
+ 
+ | Variable                                                                      | Values | Meaning                                                                                    |
+ | ----------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------ |
+diff --git a/apps/cortex/src/enrichment/find-account.ts b/apps/cortex/src/enrichment/find-account.ts
+index 75634a5..acc5ca4 100644
+--- a/apps/cortex/src/enrichment/find-account.ts
++++ b/apps/cortex/src/enrichment/find-account.ts
+@@ -111,6 +111,38 @@ export function pickAccount(
+   return { kind: 'unresolved' };
+ }
+ 
++const parenthesized = /\([^()]*\)/g;
++
++const linkUrl = /\(https?:[^()]*\)/g;
++
++function comparableName(name: string): string {
++  return name
++    .normalize('NFKD')
++    .replace(/\p{M}/gu, '')
++    .toLowerCase()
++    .replace(/[^\p{L}\p{N}]+/gu, ' ')
++    .trim();
++}
++
++function candidateNamed(
++  candidates: readonly AccountCandidate[],
++  accountName: string | null,
++): AccountCandidate | undefined {
++  if (accountName === null) return undefined;
++
++  const name = accountName.replace(linkUrl, ' ');
++
++  for (const wanted of [name, name.replace(parenthesized, ' ')].map(comparableName)) {
++    if (wanted === '') continue;
++
++    const named = candidates.filter(({ name }) => name !== null && comparableName(name) === wanted);
++
++    if (named.length > 0) return named.length === 1 ? named[0] : undefined;
++  }
++
++  return undefined;
++}
++
+ export function customerEmails(input: EnrichmentInput): string[] {
+   const emails = new Set<string>();
+ 
+@@ -216,6 +248,11 @@ export async function findAccount(
+       contacts,
+     );
+ 
++    const named =
++      match.kind === 'ambiguous' ? candidateNamed(match.candidates, input.accountName) : undefined;
++
++    if (named !== undefined) return found('domain-and-name', named.id, null, contacts);
++
+     if (match.kind !== 'unresolved') return match;
+   }
+ 
+diff --git a/apps/cortex/src/enrichment/gong-input.ts b/apps/cortex/src/enrichment/gong-input.ts
+index 59bc3c7..e000e82 100644
+--- a/apps/cortex/src/enrichment/gong-input.ts
++++ b/apps/cortex/src/enrichment/gong-input.ts
+@@ -17,6 +17,7 @@ export function enrichmentInputFromGong(
+     sourceId: callId,
+     occurredAt: call.startedAt,
+     accountId: salesforceId(call.crm, 'Account'),
++    accountName: null,
+     opportunityId: salesforceId(call.crm, 'Opportunity'),
+     appId: null,
+     participants: call.parties.map((party) => ({
+diff --git a/apps/cortex/src/enrichment/model.ts b/apps/cortex/src/enrichment/model.ts
+index 38a105e..45f93e7 100644
+--- a/apps/cortex/src/enrichment/model.ts
++++ b/apps/cortex/src/enrichment/model.ts
+@@ -16,12 +16,19 @@ export interface EnrichmentInput {
+   sourceId: string;
+   occurredAt: string | null;
+   accountId: string | null;
++  accountName: string | null;
+   opportunityId: string | null;
+   appId: string | null;
+   participants: EnrichmentParticipant[];
+ }
+ 
+-export type FoundBy = 'source-account-id' | 'contact-id' | 'app-id' | 'email' | 'domain';
++export type FoundBy =
++  | 'source-account-id'
++  | 'contact-id'
++  | 'app-id'
++  | 'email'
++  | 'domain'
++  | 'domain-and-name';
+ 
+ export type AttributionMethod = FoundBy | 'unresolved';
+ 
+@@ -33,6 +40,7 @@ export const confidenceOf: Record<AttributionMethod, Confidence> = {
+   'app-id': 'high',
+   email: 'medium',
+   domain: 'low',
++  'domain-and-name': 'medium',
+   unresolved: 'none',
+ };
+ 
+diff --git a/apps/cortex/src/enrichment/slack-input.ts b/apps/cortex/src/enrichment/slack-input.ts
+index cdac609..03603cd 100644
+--- a/apps/cortex/src/enrichment/slack-input.ts
++++ b/apps/cortex/src/enrichment/slack-input.ts
+@@ -21,6 +21,7 @@ export function enrichmentInputFromSlack(raw: SlackRawSnapshot): EnrichmentInput
+     sourceId: threadId,
+     occurredAt: postedAt,
+     accountId: accountId ?? null,
++    accountName: form.customerAccountName,
+     opportunityId: null,
+     appId: null,
+     participants: email.success
+diff --git a/apps/cortex/tests/enrichment/find-account.test.ts b/apps/cortex/tests/enrichment/find-account.test.ts
+index f908291..dc58a92 100644
+--- a/apps/cortex/tests/enrichment/find-account.test.ts
++++ b/apps/cortex/tests/enrichment/find-account.test.ts
+@@ -119,6 +119,75 @@ test('the domain is the last resort and consumer domains are skipped', async ()
+   ]);
+ });
+ 
++const groupAccounts = [
++  { id: '001Qy00000AbCdEIAQ', name: 'Northwind Retail' },
++  { id: '001Qy00000FgHiJIAS', name: 'Northwind Crème Group' },
++  { id: '001Qy00000KlMnOIAU', name: 'Northwind Logistics' },
++];
++
++test('a domain shared by several accounts resolves to the one the source names', async () => {
++  const match = await findAccount(
++    signal({ accountName: 'northwind creme group (EMEA)' }),
++    stubSession({ domains: groupAccounts }),
++  );
++
++  expect(match.kind === 'found' && match.foundBy).toBe('domain-and-name');
++  expect(match.kind === 'found' && match.accountId).toBe('001Qy00000FgHiJIAS');
++});
++
++test('a shared domain stays ambiguous unless exactly one of its accounts has the name', async () => {
++  const twins = [...groupAccounts, { id: '001Qy00000PqRsTIAW', name: 'Northwind-Retail' }];
++
++  for (const [accountName, domains] of [
++    [null, groupAccounts],
++    ['Northwind', groupAccounts],
++    ['Northwind Retail', twins],
++  ] as const) {
++    await expect(
++      findAccount(signal({ accountName }), stubSession({ domains: [...domains] })),
++    ).resolves.toMatchObject({ kind: 'ambiguous', foundBy: 'domain' });
++  }
++});
++
++const regionalAccounts = [
++  { id: '001Qy00000AbCdEIAQ', name: 'Northwind (EMEA)' },
++  { id: '001Qy00000KlMnOIAU', name: 'Northwind Holdings' },
++];
++
++test('an account whose qualifier in parentheses the source does not name is never picked', async () => {
++  for (const accountName of ['Northwind (US)', 'Northwind']) {
++    await expect(
++      findAccount(signal({ accountName }), stubSession({ domains: regionalAccounts })),
++    ).resolves.toMatchObject({ kind: 'ambiguous', foundBy: 'domain' });
++  }
++});
++
++test('an account with a qualifier in parentheses is found by its full name', async () => {
++  const match = await findAccount(
++    signal({ accountName: 'northwind (emea)' }),
++    stubSession({
++      domains: [...regionalAccounts, { id: '001Qy00000FgHiJIAS', name: 'Northwind (US)' }],
++    }),
++  );
++
++  expect(match.kind === 'found' && match.accountId).toBe('001Qy00000AbCdEIAQ');
++});
++
++test('several accounts with the whole name stay ambiguous though one has the name without parentheses', async () => {
++  const match = await findAccount(
++    signal({ accountName: 'Northwind (EMEA)' }),
++    stubSession({
++      domains: [
++        ...regionalAccounts,
++        { id: '001Qy00000FgHiJIAS', name: 'Northwind EMEA' },
++        { id: '001Qy00000PqRsTIAW', name: 'Northwind' },
++      ],
++    }),
++  );
++
++  expect(match).toMatchObject({ kind: 'ambiguous', foundBy: 'domain' });
++});
++
+ test('only well formed company domains are looked up', () => {
+   expect(
+     companyDomains([
+diff --git a/apps/cortex/tests/enrichment/input-matrix.test.ts b/apps/cortex/tests/enrichment/input-matrix.test.ts
+index 3f488a6..aabd3ba 100644
+--- a/apps/cortex/tests/enrichment/input-matrix.test.ts
++++ b/apps/cortex/tests/enrichment/input-matrix.test.ts
+@@ -47,6 +47,7 @@ const nothing: EnrichmentInput = {
+   sourceId: '900000000000000009',
+   occurredAt: '2026-09-15T09:01:12.000Z',
+   accountId: null,
++  accountName: null,
+   opportunityId: null,
+   appId: null,
+   participants: [],
+diff --git a/apps/cortex/tests/enrichment/support.ts b/apps/cortex/tests/enrichment/support.ts
+index d89d4ac..b9afa59 100644
+--- a/apps/cortex/tests/enrichment/support.ts
++++ b/apps/cortex/tests/enrichment/support.ts
+@@ -150,6 +150,7 @@ export function signal(overrides: Partial<EnrichmentInput> = {}): EnrichmentInpu
+     sourceId: '900000000000000001',
+     occurredAt: '2026-09-15T09:01:12.000Z',
+     accountId: null,
++    accountName: null,
+     opportunityId: null,
+     appId: null,
+     participants: [
+diff --git a/apps/cortex/tests/slack-ingestion.test.ts b/apps/cortex/tests/slack-ingestion.test.ts
+index fe29474..535d8e2 100644
+--- a/apps/cortex/tests/slack-ingestion.test.ts
++++ b/apps/cortex/tests/slack-ingestion.test.ts
+@@ -253,6 +253,7 @@ test('enrichment looks the account up by the Salesforce id in the form, or finds
+     sourceId: threadId,
+     occurredAt: '2026-09-20T10:26:40.000Z',
+     accountId: '001Qy00000FgHiJIAS',
++    accountName: 'Contoso Outdoors (001Qy00000FgHiJIAS)',
+     opportunityId: null,
+     appId: null,
+     participants: [
+@@ -267,7 +268,7 @@ test('enrichment looks the account up by the Salesforce id in the form, or finds
+ 
+   expect(
+     enrichmentInputFromSlack({ ...(await fixtureRaw()), repliesResponses: [formPost(olderForm)] }),
+-  ).toMatchObject({ accountId: null, participants: [] });
++  ).toMatchObject({ accountId: null, accountName: null, participants: [] });
+ });
+ 
+ function slackResponse(body: JsonValue, init: ResponseInit = {}): Response {

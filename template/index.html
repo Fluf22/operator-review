@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operator review</title>
+<script>
+  try { const t = localStorage.getItem('operator-review/theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  /* Tokens and components follow the skill's DESIGN.md, except diagram nodes: new blue, risk red, fix green. */
+  :root {
+    color-scheme: light dark;
+    --hue: 260;
+    --paper: oklch(0.97 0.004 var(--hue));
+    --paper-panel: oklch(0.94 0.005 var(--hue));
+    --ink: oklch(0.18 0.005 var(--hue));
+    --ink-panel: oklch(0.22 0.005 var(--hue));
+    --fg-paper: oklch(0.25 0.008 var(--hue));
+    --fg-ink: oklch(0.92 0.004 var(--hue));
+    --bg: light-dark(var(--paper), var(--ink));
+    --panel: light-dark(var(--paper-panel), var(--ink-panel));
+    --frost: light-dark(oklch(0.97 0.004 var(--hue) / 0.62), oklch(0.22 0.005 var(--hue) / 0.55));
+    --frost-line: light-dark(oklch(0.86 0.006 var(--hue) / 0.75), oklch(0.4 0.005 var(--hue) / 0.7));
+    --frost-check: light-dark(oklch(0.96 0.028 75 / 0.62), oklch(0.28 0.035 75 / 0.55));
+    --frost-check-line: light-dark(oklch(0.82 0.06 75 / 0.75), oklch(0.48 0.05 75 / 0.7));
+    --raised: light-dark(oklch(0.91 0.005 var(--hue)), oklch(0.26 0.005 var(--hue)));
+    --line: light-dark(oklch(0.86 0.006 var(--hue)), oklch(0.32 0.005 var(--hue)));
+    --line-strong: light-dark(oklch(0.72 0.008 var(--hue)), oklch(0.46 0.006 var(--hue)));
+    --text: light-dark(var(--fg-paper), var(--fg-ink));
+    --muted: light-dark(oklch(0.48 0.008 var(--hue)), oklch(0.66 0.006 var(--hue)));
+    --accent: light-dark(oklch(0.32 0.012 var(--hue)), oklch(0.85 0.01 var(--hue)));
+    --accent-dim: light-dark(oklch(0.32 0.012 var(--hue) / 0.1), oklch(0.85 0.01 var(--hue) / 0.14));
+    --warn: light-dark(oklch(0.52 0.12 85), oklch(0.78 0.08 85));
+    --dot: light-dark(oklch(0.62 0.006 var(--hue)), oklch(0.55 0.006 var(--hue)));
+    --dot-current: light-dark(oklch(0.34 0.008 var(--hue)), oklch(0.88 0.005 var(--hue)));
+    --warn-fill: light-dark(oklch(0.95 0.03 75), oklch(0.27 0.035 75));
+    --danger: light-dark(oklch(0.5 0.14 25), oklch(0.7 0.12 25));
+    --node-new: light-dark(oklch(0.56 0.18 260), oklch(0.72 0.14 260));
+    --node-new-fill: light-dark(oklch(0.95 0.025 260), oklch(0.31 0.07 260));
+    --node-new-text: light-dark(oklch(0.38 0.12 260), oklch(0.9 0.05 260));
+    --node-risk: light-dark(oklch(0.56 0.17 33), oklch(0.7 0.15 30));
+    --node-risk-fill: light-dark(oklch(0.95 0.025 30), oklch(0.31 0.07 30));
+    --node-risk-text: light-dark(oklch(0.4 0.12 30), oklch(0.9 0.05 30));
+    --node-fix: light-dark(oklch(0.56 0.12 160), oklch(0.72 0.13 160));
+    --node-fix-fill: light-dark(oklch(0.95 0.03 160), oklch(0.31 0.06 160));
+    --node-fix-text: light-dark(oklch(0.4 0.09 160), oklch(0.9 0.05 160));
+    --code: "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --radius: 4px;
+    --dur: 160ms;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: var(--ui);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+  button { font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: var(--radius); padding: 4px 8px; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--raised); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.is-active { background: var(--accent-dim); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .muted { color: var(--muted); }
+
+  .shell { display: flex; flex-direction: column; height: 100%; container-type: inline-size; container-name: app; }
+  .walk { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; }
+
+  .sidebar { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .pr-head { padding: 8px 6px 8px 12px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 4px; }
+  .pr-head > div { flex: 1; min-width: 0; }
+  .theme-btn { flex: 0 0 auto; width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  .theme-btn:hover:not(:disabled) { color: var(--text); }
+  .pr-head .title { font-size: 13px; font-weight: 500; line-height: 1.35; }
+  .pr-head .sub { margin-top: 2px; font-size: 11px; color: var(--muted); }
+  .pr-link { display: inline-flex; margin-top: 8px; padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 11px; font-weight: 500; color: var(--text); }
+  .pr-link:hover { background: var(--raised); text-decoration: none; }
+  .pr-link[hidden] { display: none; }
+  .steps { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 1px; }
+  .row { display: grid; grid-template-columns: 1.6rem 1fr auto; gap: 4px 8px; align-items: baseline; width: 100%; text-align: left; padding: 6px 8px; }
+  .row .num { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .row .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row:hover .num, .row.is-active .num { color: var(--accent); }
+  .row.step-row { margin-top: 6px; font-weight: 500; }
+  .row.step-row:first-child { margin-top: 0; }
+  .row.step-row .tag { grid-column: 2; }
+  .row.sub-row { padding-left: 8px; color: var(--muted); grid-template-columns: 1.6rem minmax(0, 1fr) auto auto; }
+  .dots { display: inline-flex; align-items: center; gap: 4px; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dot); }
+  .dot.is-current { background: var(--dot-current); }
+  .row.sub-row.is-active { color: var(--text); }
+  .row.sub-row.seen:not(.is-active) .title { color: var(--text); }
+  .tag { font-size: 11px; color: var(--muted); font-weight: 400; white-space: nowrap; }
+  .tag.risk { color: var(--danger); }
+  .tag.ok { color: var(--accent); }
+  .tag.open { color: var(--warn); font-variant-numeric: tabular-nums; }
+  .ledger { border-top: 1px solid var(--line); padding: 8px 12px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .ledger span { flex: 1; min-width: 0; color: var(--muted); }
+  .ledger b { font-weight: 500; color: var(--warn); }
+  .ledger button { font-size: 11px; padding: 2px 6px; color: var(--muted); }
+  .help-foot { border-top: 1px solid var(--line); padding: 4px 6px; }
+  .help-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 11px; color: var(--muted); text-align: left; }
+  .help-btn:hover { color: var(--text); background: var(--raised); }
+  kbd { font-family: var(--code); font-size: 11px; line-height: 1.3; min-width: 18px; padding: 0 4px; text-align: center; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 3px; background: var(--raised); color: var(--text); }
+  .help-dialog { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: oklch(0.2 0.005 260 / 0.35); }
+  .help-dialog[hidden] { display: none; }
+  .help-card { width: min(420px, 100%); max-height: 100%; overflow: auto; padding: 14px 16px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 40px oklch(0 0 0 / 0.25); }
+  .help-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .help-head h2 { margin: 0; font-size: 13px; font-weight: 500; }
+  .help-close { width: 28px; height: 28px; padding: 0; font-size: 16px; line-height: 1; color: var(--muted); }
+  .help-close:hover { color: var(--text); background: var(--raised); }
+  .help-group { margin-top: 12px; }
+  .help-group h3 { margin: 0 0 4px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; color: var(--muted); }
+  .help-list { display: grid; grid-template-columns: max-content 1fr; gap: 5px 12px; margin: 0; align-items: baseline; }
+  .help-list dt { white-space: nowrap; }
+  .help-list dd { margin: 0; }
+  .help-note { margin: 12px 0 0; font-size: 11px; }
+
+  .stage { position: relative; min-width: 0; min-height: 0; background: var(--bg); }
+  .scroll { position: absolute; inset: 0; overflow: auto; padding-bottom: 72px; }
+  .diagram-pane { position: relative; height: calc(100% - 26px); min-height: 300px; }
+  .stage.has-files .diagram-pane { height: min(56vh, 560px); }
+  .diagram { position: absolute; inset: 16px 16px 8px; display: flex; align-items: center; justify-content: center; transition: opacity var(--dur) var(--ease); }
+  .diagram.leaving { opacity: 0; }
+  .diagram .error { color: var(--danger); font: 12px var(--code); white-space: pre-wrap; }
+  @container app (min-width: 1180px) { .stage:not(.notes-min) .diagram { right: 348px; } }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 16px 8px; font-size: 11px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend span[hidden] { display: none; }
+  .sw { width: 14px; height: 10px; border-radius: 2px; border: 1.5px solid; }
+  .sw.ctx { background: var(--panel); border-color: var(--line-strong); }
+  .sw.new { background: var(--node-new-fill); border-color: var(--node-new); }
+  .sw.gone { background: var(--bg); border-color: var(--muted); border-style: dotted; }
+  .sw.risk { background: var(--node-risk-fill); border-color: var(--node-risk); }
+  .sw.fix { background: var(--node-fix-fill); border-color: var(--node-fix); border-style: dashed; }
+  .files-head { margin: 8px 12px 4px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .files { display: grid; gap: 12px; padding: 0 12px; }
+  .file { display: block; min-width: 0; color-scheme: inherit; }
+
+  .walk-notes, .walk-dock-bar, .walk-picker {
+    background: var(--frost);
+    backdrop-filter: blur(18px) saturate(1.15);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    border: 1px solid var(--frost-line);
+  }
+  .walk-notes { position: absolute; z-index: 16; top: 12px; right: 12px; width: min(320px, calc(100% - 24px)); display: flex; flex-direction: column; max-height: min(60vh, 460px); border-radius: 8px; }
+  .walk-notes.is-check { background: var(--frost-check); border-color: var(--frost-check-line); }
+  .walk-notes-min { width: 40px; height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .walk-notes-head { display: flex; align-items: center; gap: 4px; padding: 6px 6px 0 12px; }
+  .walk-notes-kicker { flex: 1; min-width: 0; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .walk-notes.is-check .walk-notes-kicker { color: var(--text); }
+  .walk-notes-head a { font-size: 11px; padding: 0 4px; }
+  .walk-notes-minbtn { flex: 0 0 auto; width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  .walk-notes-minbtn:disabled { opacity: 0.35; }
+  .walk-notes-body { padding: 2px 12px 10px; overflow: auto; font-size: 12px; line-height: 1.45; }
+  .walk-notes-body p, .walk-notes-body ul { margin: 0; }
+  .walk-notes-body > * + * { margin-top: 8px; }
+  .walk-notes-title, .walk-notes-concern, .walk-notes-ask { font-weight: 500; }
+  .walk-notes-title { font-size: 13px; line-height: 1.35; }
+  .walk-notes-where { font: 11px var(--code); color: var(--muted); overflow-wrap: anywhere; }
+  .breaking-head { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--danger); }
+  .breaking-head + ul { margin-top: 4px; padding-left: 16px; }
+  .mark-actions { display: flex; gap: 4px; }
+  .mark-actions button, .walk-notes-body button.primary { border-color: var(--line); }
+  .mark-actions button[aria-pressed="true"] { background: var(--accent-dim); border-color: var(--accent); }
+  .mark-actions button[data-mark="review"][aria-pressed="true"] { background: var(--warn-fill); border-color: var(--warn); }
+  .walk-notes-where a { color: inherit; }
+  .walk-notes-minbtn[aria-pressed="true"] { color: var(--text); background: var(--accent-dim); }
+  .own-note { display: grid; gap: 2px; width: 100%; padding: 4px 8px; border: 0; border-left: 2px solid var(--accent); border-radius: 0; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .own-note .muted, .note-hint { font-size: 11px; }
+  .note-box textarea { display: block; box-sizing: border-box; width: 100%; min-height: 72px; resize: vertical; padding: 6px 8px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+  .note-box textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .note-hint { margin-top: 4px !important; }
+
+  .stage.list-view .diagram-pane, .stage.list-view .legend, .stage.list-view #files-wrap, .stage.list-view #notes { display: none; }
+  #list { display: none; }
+  .stage.list-view #list { display: block; }
+  .review-list { max-width: 860px; margin: 0 auto; padding: 16px 16px 0; }
+  .list-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .list-head h2 { margin: 0; font-size: 13px; font-weight: 500; }
+  .list-head .muted { flex: 1; font-size: 11px; }
+  .publish-status { flex-basis: 100%; margin: 0; font-size: 11px; }
+  .publish-status:empty { display: none; }
+  .list-head button { border-color: var(--line); font-size: 11px; }
+  .list-head button kbd { border-bottom-width: 1px; background: light-dark(oklch(0.93 0.004 var(--hue)), oklch(0.25 0.005 var(--hue))); }
+  .list-section h3 { margin: 18px 0 4px; font-size: 11px; font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .list-section .empty { margin: 0; padding: 6px 8px; color: var(--muted); }
+  .item { display: grid; gap: 4px; padding: 8px; border-radius: var(--radius); }
+  .item + .item { border-top: 1px solid var(--line); border-radius: 0; }
+  .item p { margin: 0; }
+  .item-head { display: flex; align-items: baseline; gap: 8px; font-size: 11px; }
+  .item-head .tag { text-transform: uppercase; letter-spacing: 0.04em; }
+  .item-text { font-weight: 500; }
+  .item-note { padding-left: 8px; border-left: 2px solid var(--accent); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .item-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; font-size: 11px; }
+  .item-foot .where { font: 11px var(--code); overflow-wrap: anywhere; }
+  .item-foot .mark-actions { margin-left: auto; }
+  .link { padding: 0; border: 0; color: var(--muted); text-align: left; }
+  .link:hover:not(:disabled) { background: none; color: var(--text); text-decoration: underline; }
+  .row.list-row { margin-top: 10px; font-weight: 500; }
+  .walk-notes-foot { display: flex; align-items: center; gap: 8px; padding: 4px 6px 6px 12px; border-top: 1px solid var(--line); }
+  .walk-notes-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted); }
+  .walk-step { flex: 0 0 auto; width: 40px; height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .walk-step svg { width: 22px; height: 22px; }
+  .walk-step-next svg { transform: scaleX(-1); }
+  .walk-notes .walk-step { width: 32px; height: 32px; }
+  .walk-notes .walk-step svg { width: 16px; height: 16px; }
+
+  .walk-dock { position: absolute; z-index: 15; bottom: 12px; left: 12px; right: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+  .walk-picker, .walk-dock-bar { pointer-events: auto; }
+  .walk-picker { width: min(460px, 100%); max-height: 50vh; overflow: auto; margin: 0; padding: 4px; list-style: none; border-radius: 8px; }
+  .walk-picker[hidden] { display: none; }
+  .walk-picker .group { padding: 8px 10px 2px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .walk-picker button { display: block; width: 100%; text-align: left; padding: 6px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .walk-dock-bar { display: flex; align-items: center; width: min(460px, 100%); border-radius: 8px; }
+  .walk-tab { flex: 1; min-width: 0; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; }
+  .walk-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .walk-tab-caret { flex: 0 0 auto; width: 12px; height: 12px; color: var(--muted); transition: transform var(--dur) var(--ease); }
+  .walk-tab[aria-expanded="true"] .walk-tab-caret { transform: rotate(180deg); }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .walk-notes, .walk-dock-bar, .walk-picker { background: var(--panel); border-color: var(--line); backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .walk-notes.is-check { background: var(--warn-fill); border-color: var(--frost-check-line); }
+  }
+  @container app (max-width: 720px) {
+    .walk { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+    .steps, .ledger { display: none; }
+  }
+
+  /* Pele diagram theme */
+  .pele { --pele-bg: var(--bg); --pele-fg: var(--text); --pele-muted: var(--muted); --pele-line: var(--muted);
+          --pele-surface: var(--panel); --pele-surface-alt: var(--raised); --pele-border: var(--line-strong); --pele-accent: var(--accent);
+          --pele-font: var(--ui); --pele-radius: 4px; }
+  .pele-node.new > :not(text)  { fill: var(--node-new-fill); stroke: var(--node-new); stroke-width: 1.6px; }
+  .pele-node.risk > :not(text) { fill: var(--node-risk-fill); stroke: var(--node-risk); stroke-width: 1.6px; }
+  .pele-node.new text { fill: var(--node-new-text); }
+  .pele-node.risk text { fill: var(--node-risk-text); }
+  .pele-node.fix > :not(text)  { fill: var(--node-fix-fill); stroke: var(--node-fix); stroke-width: 1.6px; stroke-dasharray: 6 4; }
+  .pele-node.fix text { fill: var(--node-fix-text); }
+  .pele-node.gone > :not(text) { fill: var(--bg); stroke: var(--muted); stroke-width: 1.2px; stroke-dasharray: 2 3; }
+  .pele-node.gone text { fill: var(--muted); text-decoration: line-through; }
+  .pele-node, .pele-edge { transition: opacity var(--dur) var(--ease); }
+  .diagram.has-lens .pele-node:not(.lens), .diagram.has-lens .pele-edge, .diagram.has-lens .pele-edge-label { opacity: 0.35; }
+  .diagram .pele-node.lens > :not(text) { stroke-width: 2.6px; }
+  .diagram .pele-node.lens:not(.new, .risk, .fix) > :not(text) { stroke: var(--accent); }
+
+  /* Entrance: clusters, then unchanged nodes, then tagged nodes; each edge draws once both ends are in. */
+  .anim .pele-cluster { animation: fade .5s ease both; animation-delay: var(--d, 0ms); }
+  .anim .pele-node > * { transform-origin: 0 0; animation: pop .5s cubic-bezier(.2, .9, .3, 1.2) both; animation-delay: var(--d, 0ms); }
+  .anim .pele-edge > path:not(.pele-marker) { animation: draw var(--len-ms, 600ms) ease-out both; animation-delay: var(--d, 0ms);
+                                               stroke-dasharray: var(--len); stroke-dashoffset: var(--len); }
+  .anim .pele-edge.dashed > path:not(.pele-marker) { stroke-dasharray: 3 4; stroke-dashoffset: 0; animation-name: fade; }
+  .anim .pele-edge > .pele-marker, .anim .pele-edge-label { animation: fade .3s ease both; animation-delay: var(--d2, 0ms); }
+
+  /* Settled: new glows once, risk pulses, fix marches, edges into new/fix flow. */
+  .settled .pele-node.new > :not(text) { animation: glow 1.6s ease-out 1; }
+  .settled .pele-node.risk > :not(text) { animation: alarm 1.8s ease-in-out infinite; }
+  .settled .pele-node.fix > :not(text) { animation: march 1.2s linear infinite; }
+  .settled .pele-edge.flow > path:not(.pele-marker) { stroke: var(--node-new); stroke-width: 1.8px; stroke-dasharray: 7 6; animation: flow .9s linear infinite; }
+  .settled .pele-edge.flow-fix > path:not(.pele-marker) { stroke: var(--node-fix); stroke-width: 1.6px; stroke-dasharray: 3 5; animation: flow 1.1s linear infinite; }
+  .settled .pele-edge.flow-risk > path:not(.pele-marker) { stroke: var(--node-risk); stroke-width: 1.6px; }
+  .settled .pele-edge.flow-gone > path:not(.pele-marker) { stroke-dasharray: 2 4; }
+  .settled .pele-edge.flow > .pele-marker { fill: var(--node-new); }
+  .settled .pele-edge.flow-fix > .pele-marker { fill: var(--node-fix); }
+  .settled .pele-edge.flow-risk > .pele-marker { fill: var(--node-risk); }
+
+  @keyframes pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes flow { to { stroke-dashoffset: -26; } }
+  @keyframes march { to { stroke-dashoffset: -20; } }
+  @keyframes glow { 0% { stroke-width: 6px; stroke-opacity: .35; } 100% { stroke-width: 1.6px; stroke-opacity: 1; } }
+  @keyframes alarm { 0%, 100% { stroke-width: 1.6px; } 50% { stroke-width: 3.4px; stroke-opacity: .7; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="walk">
+    <aside class="sidebar">
+      <div class="pr-head">
+        <div><div class="title" id="title"></div><div class="sub" id="subtitle"></div><a class="pr-link" id="pr-link" target="_blank" rel="noopener" hidden></a></div>
+        <button class="theme-btn" id="theme"></button>
+      </div>
+      <nav class="steps" id="steps" aria-label="Steps"></nav>
+      <div class="ledger" id="ledger"></div>
+      <div class="help-foot">
+        <button class="help-btn" id="help" aria-haspopup="dialog" title="Keyboard shortcuts (?)"><kbd>?</kbd><span>Keyboard shortcuts</span></button>
+      </div>
+    </aside>
+    <section class="stage" id="stage">
+      <div class="scroll" id="scroll">
+        <div class="diagram-pane"><div class="diagram" id="diagram"></div></div>
+        <div class="legend" id="legend">
+          <span data-kind="ctx"><i class="sw ctx"></i>Unchanged</span>
+          <span data-kind="new"><i class="sw new"></i>Added or changed</span>
+          <span data-kind="gone"><i class="sw gone"></i>Removed</span>
+          <span data-kind="risk"><i class="sw risk"></i>Finding or deploy risk</span>
+          <span data-kind="fix"><i class="sw fix"></i>Suggested fix</span>
+        </div>
+        <div id="files-wrap"></div>
+        <div id="list"></div>
+      </div>
+      <div id="notes"></div>
+      <nav class="walk-dock" aria-label="Storyboard walk">
+        <ul class="walk-picker" id="picker" role="listbox" aria-label="Substeps" hidden></ul>
+        <div class="walk-dock-bar">
+          <button class="walk-step" id="prev" aria-label="Previous card"></button>
+          <button class="walk-tab" id="tab" aria-haspopup="listbox" aria-expanded="false">
+            <span class="walk-tab-label" id="tab-label"></span>
+            <svg class="walk-tab-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="walk-step walk-step-next" id="next" aria-label="Next card"></button>
+        </div>
+      </nav>
+    </section>
+  </div>
+  <div class="help-dialog" id="help-dialog" hidden>
+    <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="help-head">
+        <h2 id="help-title">Keyboard shortcuts</h2>
+        <button class="help-close" id="help-close" aria-label="Close shortcuts">×</button>
+      </div>
+      <div class="help-group">
+        <h3>Move</h3>
+        <dl class="help-list">
+          <dt><kbd>→</kbd> <kbd>↓</kbd></dt><dd>Next card. After the last card of a substep, goes to the first card of the next one. After the last card overall, opens the review list.</dd>
+          <dt><kbd>←</kbd> <kbd>↑</kbd></dt><dd>Previous card. From the first card of a substep, goes to the last card of the one before. From the review list, returns to the last card.</dd>
+          <dt>Arrow buttons</dt><dd>Same as → and ← (the sidebar dots show where you are in a substep).</dd>
+          <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Jump to the first substep of step 1 to 9.</dd>
+          <dt><kbd>p</kbd></dt><dd>Replay the diagram animation.</dd>
+        </dl>
+      </div>
+      <div class="help-group">
+        <h3>Marks and notes</h3>
+        <dl class="help-list">
+          <dt><kbd>s</kbd></dt><dd>Mark the current check or question Safe. Press again to reopen it.</dd>
+          <dt><kbd>r</kbd></dt><dd>Mark it Review, so it goes on the review list. Press again to reopen it.</dd>
+          <dt><kbd>n</kbd></dt><dd>Open or close the note box on this card.</dd>
+          <dt><kbd>g</kbd></dt><dd>On the review list: publish the pending review (asks first; one PENDING review per PR).</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close the note box, the substep picker, or this list.</dd>
+        </dl>
+      </div>
+      <div class="help-group">
+        <h3>Other</h3>
+        <dl class="help-list">
+          <dt><kbd>t</kbd></dt><dd>Cycle the theme: System, Light, Dark.</dd>
+          <dt><kbd>?</kbd></dt><dd>Show or hide this list.</dd>
+        </dl>
+      </div>
+      <p class="muted help-note">Shortcuts are off while you type in a note.</p>
+    </div>
+  </div>
+</div>
+
+<script src="pele.global.js"></script>
+<script src="storyboard.js"></script>
+<script>
+(() => {
+  const BOARD = window.STORYBOARD;
+  const STEPS = BOARD.steps;
+  const TAGS = ['new', 'gone', 'risk', 'fix'];
+  const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICON_NOTES = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M3.5 4.5h9M3.5 8h9M3.5 11.5h6"/></svg>';
+  const ICON_FIRST = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M3 2.5v7M9.5 2.5 5.5 6l4 3.5"/></svg>';
+  const ICON_PEN = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M8 1.8 10.2 4 4.2 10H2V7.8z"/></svg>';
+  const ICON_MIN = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M2.5 6h7"/></svg>';
+  const THEME_ICONS = {
+    system: '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"/></svg>',
+    light: '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    dark: '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+  };
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const tone = (v) => (/approve|lgtm|ship/i.test(v) ? 'ok' : /change|block|reject/i.test(v) ? 'risk' : '');
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), scroll = $('scroll'), diagram = $('diagram'), notesEl = $('notes'), picker = $('picker'), tab = $('tab');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const flat = STEPS.flatMap((step, si) => step.substeps.map((sub, ki) => {
+    const cards = [{ kind: 'summary' }];
+    (sub.notes ?? []).forEach((note, i) => cards.push({ kind: note.kind, note, key: note.kind === 'check' ? `${si}.${ki}.n${i}` : null }));
+    (sub.questions ?? []).forEach((q, i) => cards.push({ kind: 'question', q, key: `${si}.${ki}.q${i}` }));
+    return { si, ki, step, sub, cards };
+  }));
+  flat.forEach((f, fi) => f.cards.forEach((c, ci) => Object.assign(c, { fi, ci })));
+  const items = flat.flatMap((f) => f.cards.filter((c) => c.key));
+  const anchorOf = (c) => c.note ?? c.q;
+  const prPage = (u) => /^https?:\/\//.test(u ?? '') ? (/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/.exec(u)?.[0] ?? u) : null;
+  const HELPER = BOARD.helper ?? { url: 'http://127.0.0.1:4317', command: 'node scripts/publish-review.mjs' };
+  let cursor = 0, card = 0, minimized = false, view = 'walk';
+  const seen = new Set();
+
+  const storeKey = `operator-review:${BOARD.slug}`;
+  let ledger = {};
+  try { ledger = JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch {}
+  for (const k of Object.keys(ledger)) if (ledger[k] !== 'review') ledger[k] = 'safe';
+  const save = () => { try { localStorage.setItem(storeKey, JSON.stringify(ledger)); } catch {} };
+  const openIn = (f) => f.cards.filter((c) => c.key && !ledger[c.key]);
+
+  const notesKey = `${storeKey}:notes`;
+  let userNotes = {};
+  try { userNotes = JSON.parse(localStorage.getItem(notesKey) || '{}'); } catch {}
+  const saveNotes = () => { try { localStorage.setItem(notesKey, JSON.stringify(userNotes)); } catch {} };
+  const noteKeyOf = (c) => `${flat[c.fi].si}.${flat[c.fi].ki}.c${c.ci}`;
+  const noteOf = (c) => userNotes[noteKeyOf(c)] ?? '';
+  const notedCards = () => flat.flatMap((f) => f.cards.filter((c) => noteOf(c)));
+  const KIND = { summary: 'Summary', explain: 'Explain', check: 'Check', question: 'Question' };
+  const contextOf = (c) => ({ explain: c.note?.body, check: c.note?.concern, question: c.q?.ask })[c.kind] ?? '';
+  let editing = false;
+
+  document.title = BOARD.title;
+  $('title').textContent = BOARD.title;
+  $('subtitle').textContent = BOARD.subtitle ?? '';
+  $('prev').innerHTML = CHEVRON;
+  $('next').innerHTML = CHEVRON;
+  const used = new Set(flat.flatMap(({ sub }) => TAGS.filter((t) => new RegExp(`:::${t}\\b`).test(sub.diagram))));
+  $('legend').querySelectorAll('[data-kind]').forEach((el) => (el.hidden = el.dataset.kind !== 'ctx' && !used.has(el.dataset.kind)));
+
+  $('steps').innerHTML = STEPS.map((s, si) => `
+    <button class="row step-row" data-go="${flat.findIndex((f) => f.si === si)}">
+      <span class="num">${si + 1}</span><span class="title">${s.kicker ? esc(s.kicker) + ' · ' : ''}${esc(s.title)}</span>${s.verdict ? `<span class="tag ${tone(s.verdict)}">${esc(s.verdict)}</span>` : '<span></span>'}
+    </button>
+    ${s.substeps.map((sub, ki) => {
+      const idx = flat.findIndex((f) => f.si === si && f.ki === ki);
+      return `<button class="row sub-row" data-go="${idx}"><span class="num">${si + 1}.${ki + 1}</span><span class="title">${esc(sub.title)}</span><span class="dots" aria-hidden="true">${'<i class="dot"></i>'.repeat(flat[idx].cards.length)}</span><span class="tag open"></span></button>`;
+    }).join('')}
+  `).join('') + `<button class="row list-row" data-list><span class="num">✓</span><span class="title">Review list</span><span class="tag open"></span></button>`;
+
+  picker.innerHTML = STEPS.map((s, si) => `
+    <li class="group" role="presentation">${si + 1}${s.kicker ? ' · ' + esc(s.kicker) : ''}</li>
+    ${s.substeps.map((sub, ki) => `<li role="presentation"><button role="option" data-go="${flat.findIndex((f) => f.si === si && f.ki === ki)}">${si + 1}.${ki + 1}  ${esc(sub.title)}</button></li>`).join('')}
+  `).join('') + `<li class="group" role="presentation">End</li><li role="presentation"><button role="option" data-list>Review list</button></li>`;
+
+  function paintSidebar() {
+    const listing = view === 'list';
+    const si = listing ? -1 : flat[cursor].si;
+    document.querySelectorAll('#steps .step-row').forEach((b, i) => b.classList.toggle('is-active', i === si));
+    document.querySelectorAll('#steps .sub-row').forEach((b, i) => {
+      b.classList.toggle('is-active', !listing && i === cursor);
+      b.classList.toggle('seen', seen.has(i));
+      b.querySelectorAll('.dot').forEach((d, k) => d.classList.toggle('is-current', !listing && i === cursor && k === card));
+      const open = openIn(flat[i]).length;
+      b.querySelector('.tag').textContent = open ? String(open) : '';
+      b.querySelector('.tag').title = open ? `${open} open` : '';
+    });
+    picker.querySelectorAll('button[data-go]').forEach((b, i) => { b.classList.toggle('is-active', !listing && i === cursor); b.setAttribute('aria-selected', !listing && i === cursor); });
+    const listOption = picker.querySelector('button[data-list]');
+    listOption.classList.toggle('is-active', listing);
+    listOption.setAttribute('aria-selected', listing);
+    const open = items.filter((c) => !ledger[c.key]).length;
+    const review = items.filter((c) => ledger[c.key] === 'review').length;
+    const listRow = document.querySelector('#steps .list-row');
+    listRow.classList.toggle('is-active', listing);
+    listRow.querySelector('.tag').textContent = review ? String(review) : '';
+    listRow.querySelector('.tag').title = review ? `${review} to review` : '';
+    const noted = notedCards().length;
+    const notePart = noted ? ` · <b>${noted}</b> note${noted > 1 ? 's' : ''}` : '';
+    $('ledger').innerHTML = items.length
+      ? `<span>${open ? `<b>${open}</b>` : 'None'} open · ${review ? `<b>${review}</b>` : 'none'} to review${notePart}</span>${Object.keys(ledger).length ? '<button id="reset" title="Clear the Safe and Review marks. Your notes stay.">Reset</button>' : ''}`
+      : `<span>No checks or questions${notePart}</span>`;
+    $('reset')?.addEventListener('click', () => { ledger = {}; save(); repaint(); });
+    const stepPrs = [...new Set(STEPS.map((s) => prPage(s.url)).filter(Boolean))];
+    const url = listing
+      ? prPage(BOARD.url) ?? (stepPrs.length === 1 ? stepPrs[0] : null)
+      : prPage(flat[cursor].step.url) ?? prPage(BOARD.url);
+    const prLink = $('pr-link');
+    prLink.hidden = !url;
+    if (url) {
+      const n = /\/pull\/(\d+)$/.exec(url)?.[1];
+      prLink.href = url;
+      prLink.textContent = n ? `Open PR #${n} ↗` : 'Open PR ↗';
+      prLink.title = 'Open the pull request';
+    }
+    $('tab-label').textContent = listing ? 'Review list' : `${flat[cursor].si + 1}.${flat[cursor].ki + 1}  ${flat[cursor].sub.title}`;
+    $('prev').disabled = !listing && cursor === 0 && card === 0;
+    $('next').disabled = listing;
+    (listing ? listRow : document.querySelectorAll('#steps .sub-row')[cursor]).scrollIntoView({ block: 'nearest' });
+  }
+
+  function repaint() {
+    paintSidebar();
+    if (view === 'list') paintList();
+    else paintNotes();
+  }
+
+  function paintFiles() {
+    const files = flat[cursor].sub.files ?? [];
+    stage.classList.toggle('has-files', files.length > 0);
+    const wrap = $('files-wrap');
+    wrap.innerHTML = files.length ? `<div class="files-head">Diff · ${files.length} file${files.length > 1 ? 's' : ''}</div><div class="files" id="files"></div>` : '';
+    for (const file of files) {
+      const host = document.createElement('div');
+      host.className = 'file';
+      host.dataset.path = file.path;
+      host.attachShadow({ mode: 'open' }).innerHTML = file.html;
+      $('files').appendChild(host);
+    }
+    scroll.scrollTop = 0;
+  }
+
+  function renderSvg(text) {
+    return pele.render(text, { responsive: true, maxWidth: Math.max(320, diagram.clientWidth), autoDirection: true, directionBreakpoint: 700 }).svg;
+  }
+
+  function fit(svg) {
+    const { width, height } = svg.viewBox.baseVal;
+    const scale = Math.min(1.6, diagram.clientWidth / width, diagram.clientHeight / height);
+    svg.style.maxWidth = 'none';
+    svg.style.width = `${Math.round(width * scale)}px`;
+    svg.style.height = 'auto';
+  }
+
+  function choreograph(el) {
+    const kindOf = (n) => TAGS.find((t) => n.classList.contains(t)) ?? 'ctx';
+    const at = (n) => { const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(n.getAttribute('transform') || ''); return m ? [+m[1], +m[2]] : [0, 0]; };
+    const vb = el.querySelector('svg').viewBox.baseVal;
+    const vertical = vb.height > vb.width * 1.1;
+    const byPos = [...el.querySelectorAll('.pele-node')].map((n) => ({ n, p: at(n) }))
+      .sort((a, b) => (vertical ? a.p[1] - b.p[1] || a.p[0] - b.p[0] : a.p[0] - b.p[0] || a.p[1] - b.p[1]));
+    const ordered = [...byPos.filter((o) => kindOf(o.n) === 'ctx'), ...byPos.filter((o) => kindOf(o.n) !== 'ctx')];
+    const delay = new Map(), kind = new Map();
+    ordered.forEach(({ n }, i) => {
+      delay.set(n.dataset.id, 250 + i * 170);
+      kind.set(n.dataset.id, kindOf(n));
+      n.style.setProperty('--d', delay.get(n.dataset.id) + 'ms');
+    });
+    el.querySelectorAll('.pele-cluster').forEach((c, i) => c.style.setProperty('--d', i * 80 + 'ms'));
+
+    let last = 0;
+    el.querySelectorAll('.pele-edge').forEach((edge) => {
+      const [, from, to] = (edge.dataset.id || '').split('_');
+      const d = Math.max(delay.get(from) ?? 0, delay.get(to) ?? 0) + 120;
+      const path = edge.querySelector('path:not(.pele-marker)');
+      const len = Math.ceil(path.getTotalLength());
+      const ms = Math.min(900, 250 + len * 1.4);
+      if (path.getAttribute('stroke-dasharray')) edge.classList.add('dashed');
+      edge.style.setProperty('--d', d + 'ms');
+      edge.style.setProperty('--d2', d + ms - 80 + 'ms');
+      edge.style.setProperty('--len', len);
+      edge.style.setProperty('--len-ms', ms + 'ms');
+      const ends = [kind.get(from), kind.get(to)];
+      if (ends[1] === 'fix') edge.classList.add('flow-fix');
+      else if (ends.includes('new')) edge.classList.add('flow');
+      else if (ends.includes('risk')) edge.classList.add('flow-risk');
+      else if (ends.includes('gone')) edge.classList.add('flow-gone');
+      el.querySelectorAll(`.pele-edge-label[data-id="${edge.dataset.id}"]`).forEach((l) => l.style.setProperty('--d2', d + ms - 80 + 'ms'));
+      last = Math.max(last, d + ms);
+    });
+    return Math.max(last, ...[...delay.values()].map((v) => v + 550)) + 100;
+  }
+
+  let settleTimer = 0;
+  function draw(animate) {
+    clearTimeout(settleTimer);
+    try {
+      diagram.innerHTML = renderSvg(flat[cursor].sub.diagram);
+    } catch (err) {
+      diagram.innerHTML = `<div class="error">${esc(err.message)}</div>`;
+      return;
+    }
+    fit(diagram.querySelector('svg'));
+    diagram.classList.remove('settled', 'anim');
+    const total = choreograph(diagram);
+    lensNode();
+    if (!animate) { diagram.classList.add('settled'); return; }
+    void diagram.offsetWidth;
+    diagram.classList.add('anim');
+    settleTimer = setTimeout(() => { diagram.classList.remove('anim'); diagram.classList.add('settled'); }, total);
+  }
+
+  const current = () => flat[cursor].cards[card];
+
+  function lensNode() {
+    const node = current()?.note?.node;
+    diagram.classList.toggle('has-lens', Boolean(node));
+    diagram.querySelectorAll('.pele-node').forEach((n) => n.classList.toggle('lens', n.dataset.id === node));
+  }
+
+  function lineRows(note) {
+    const host = [...document.querySelectorAll('.file')].find((h) => h.dataset.path === note.path);
+    if (!host || note.line === undefined) return { host, rows: [] };
+    const root = host.shadowRoot;
+    const rows = [];
+    for (let l = note.line; l <= (note.end ?? note.line); l++) {
+      const sel = note.side === 'old'
+        ? `[data-line-type="change-deletion"][data-line="${l}"], [data-alt-line="${l}"], [data-line-type="context"][data-line="${l}"]:not([data-alt-line])`
+        : `[data-line="${l}"]:not([data-line-type="change-deletion"])`;
+      rows.push(...root.querySelectorAll(sel));
+    }
+    return { host, rows };
+  }
+
+  function lensLines(flash) {
+    document.querySelectorAll('.file').forEach((h) => h.shadowRoot.querySelectorAll('.walk-lens').forEach((r) => r.classList.remove('walk-lens')));
+    const note = anchorOf(current());
+    if (!note?.path) return;
+    const { host, rows } = lineRows(note);
+    if (!host) return;
+    const behavior = reduced ? 'auto' : 'smooth';
+    if (!rows.length) { host.scrollIntoView({ block: 'start', behavior }); return; }
+    rows[0].scrollIntoView({ block: 'center', behavior });
+    for (const r of rows) {
+      r.classList.add('walk-lens');
+      if (!flash) continue;
+      r.classList.remove('walk-flash');
+      void r.offsetWidth;
+      r.classList.add('walk-flash');
+      r.addEventListener('animationend', () => r.classList.remove('walk-flash'), { once: true });
+    }
+  }
+
+  function paintNotes() {
+    const f = flat[cursor];
+    const c = current();
+    stage.classList.toggle('notes-min', minimized);
+    if (minimized) {
+      notesEl.innerHTML = `<button class="walk-notes walk-notes-min${c.kind === 'check' ? ' is-check' : ''}" id="unmin" aria-label="Open walk notes">${ICON_NOTES}</button>`;
+      $('unmin').onclick = () => setMin(false);
+      return;
+    }
+    const state = c.key ? ledger[c.key] : undefined;
+    const left = openIn(f).length;
+    const kicker = { summary: `Step ${f.si + 1}.${f.ki + 1}${f.step.kicker ? ' · ' + esc(f.step.kicker) : ''}`, explain: 'Explain', check: 'Check', question: 'Question' }[c.kind];
+    const a = anchorOf(c);
+    const whereText = whereOf(a);
+    const where = whereText ? `<p class="walk-notes-where">${a.href ? `<a href="${esc(a.href)}" target="_blank" rel="noopener" title="Open this line in the GitHub PR diff">${esc(whereText)} ↗</a>` : esc(whereText)}</p>` : '';
+    let body = '';
+    if (c.kind === 'summary') {
+      body = `<p class="walk-notes-title">${esc(f.sub.title)}</p><p>${esc(f.sub.body)}</p>`
+        + (f.sub.breaking?.length ? `<p class="breaking-head">BREAKING</p><ul>${f.sub.breaking.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : '');
+    } else if (c.kind === 'explain' || c.kind === 'check') {
+      body = where + `<p>${esc(c.note.body)}</p>`
+        + (c.kind === 'check' ? `<p class="walk-notes-concern">${esc(c.note.concern)}</p>${markButtons(c.key, true)}` : '');
+    } else if (c.kind === 'question') {
+      body = where + `<p class="walk-notes-ask">${esc(c.q.ask)}</p>${c.q.context ? `<p class="muted">${esc(c.q.context)}</p>` : ''}${markButtons(c.key, true)}`;
+    }
+    const noteText = noteOf(c);
+    if (editing) body += `<div class="note-box"><textarea id="note-input" rows="3" placeholder="Your note for the final review" aria-label="Your note for the final review">${esc(noteText)}</textarea><p class="note-hint muted">Saved as you type · Esc closes</p></div>`;
+    else if (noteText) body += `<button class="own-note" id="edit-note" title="Edit your note (n)"><span class="muted">Your note</span>${esc(noteText)}</button>`;
+    const meta = [
+      c.key ? stateLabel(state) : null,
+      left ? `${left} left` : null,
+      `${card + 1} / ${f.cards.length}`,
+    ].filter(Boolean).join(' · ');
+    notesEl.innerHTML = `
+      <aside class="walk-notes${c.kind === 'check' ? ' is-check' : ''}" aria-label="Walk notes">
+        <header class="walk-notes-head">
+          <span class="walk-notes-kicker">${kicker}</span>
+          ${c.kind === 'summary' && f.step.url ? `<a href="${esc(f.step.url)}" target="_blank" rel="noopener">open ↗</a>` : ''}
+          <button class="walk-notes-minbtn" id="note-btn" aria-label="Note for the final review (n)" title="Note for the final review (n)" aria-pressed="${editing}">${ICON_PEN}</button>
+          <button class="walk-notes-minbtn" id="first" aria-label="Back to summary" ${card === 0 ? 'disabled' : ''}>${ICON_FIRST}</button>
+          <button class="walk-notes-minbtn" id="min" aria-label="Minimize notes">${ICON_MIN}</button>
+        </header>
+        <div class="walk-notes-body">${body}</div>
+        <footer class="walk-notes-foot">
+          <span class="walk-notes-meta">${meta}</span>
+        </footer>
+      </aside>`;
+    $('first').onclick = () => goCard(0);
+    $('min').onclick = () => setMin(true);
+    $('note-btn').onclick = toggleNote;
+    $('edit-note')?.addEventListener('click', toggleNote);
+    const input = $('note-input');
+    if (input) {
+      input.addEventListener('input', () => setNote(c, input.value));
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
+  function setNote(c, text) {
+    if (text.trim()) userNotes[noteKeyOf(c)] = text;
+    else delete userNotes[noteKeyOf(c)];
+    saveNotes();
+    paintSidebar();
+  }
+
+  function toggleNote() {
+    if (view !== 'walk') return;
+    editing = !editing;
+    if (minimized) setMin(false);
+    else paintNotes();
+  }
+
+  function whereOf(a) {
+    if (!a?.path) return '';
+    if (a.line === undefined) return a.path;
+    return `${a.path}:${a.line}${a.end ? '-' + a.end : ''}${a.side === 'old' ? ' (old)' : ''}`;
+  }
+
+  const stateLabel = (s) => (s === 'safe' ? 'Safe' : s === 'review' ? 'To review' : 'Open');
+
+  function markButtons(key, keys) {
+    const s = ledger[key];
+    return `<div class="mark-actions">
+        <button data-mark="safe" data-key="${key}" aria-pressed="${s === 'safe'}" title="Not a big deal, or it will be fixed later. You own it.">Safe${keys ? ' <span class="muted">s</span>' : ''}</button>
+        <button data-mark="review" data-key="${key}" aria-pressed="${s === 'review'}" title="Add it to the review list, to double-check or comment on the PR.">Review${keys ? ' <span class="muted">r</span>' : ''}</button>
+      </div>`;
+  }
+
+  function mark(key, value) {
+    if (!key) return;
+    if (ledger[key] === value) delete ledger[key];
+    else ledger[key] = value;
+    save();
+    repaint();
+  }
+
+  function itemRow(c) {
+    const f = flat[c.fi];
+    const a = anchorOf(c);
+    const text = c.kind === 'check' ? c.note.concern : c.q.ask;
+    const detail = c.kind === 'check' ? c.note.body : c.q.context;
+    return `<div class="item">
+        <div class="item-head"><span class="tag${c.kind === 'check' ? ' open' : ''}">${c.kind === 'check' ? 'Check' : 'Question'}</span><button class="link" data-jump="${c.fi}.${c.ci}">${f.si + 1}.${f.ki + 1} ${esc(f.sub.title)}</button></div>
+        <p class="item-text">${esc(text)}</p>
+        ${detail ? `<p class="muted">${esc(detail)}</p>` : ''}
+        <div class="item-foot">${linkOf(a)}${markButtons(c.key, false)}</div>
+      </div>`;
+  }
+
+  function linkOf(a) {
+    const whereText = whereOf(a);
+    if (a?.href) return `<a class="where" href="${esc(a.href)}" target="_blank" rel="noopener" title="Comment on this line in the GitHub PR diff">${esc(whereText || 'Open the PR diff')} ↗</a>`;
+    return whereText ? `<span class="where">${esc(whereText)}</span>` : '';
+  }
+
+  function noteRow(c) {
+    const f = flat[c.fi];
+    const context = contextOf(c);
+    return `<div class="item">
+        <div class="item-head"><span class="tag">${KIND[c.kind]}</span><button class="link" data-jump="${c.fi}.${c.ci}">${f.si + 1}.${f.ki + 1} ${esc(f.sub.title)}</button>${c.key ? `<span class="muted">${stateLabel(ledger[c.key])}</span>` : ''}</div>
+        ${context ? `<p class="muted">${esc(context)}</p>` : ''}
+        <p class="item-note">${esc(noteOf(c))}</p>
+        <div class="item-foot">${linkOf(anchorOf(c))}<button class="link" data-edit="${c.fi}.${c.ci}">Edit</button>${c.key ? markButtons(c.key, false) : ''}</div>
+      </div>`;
+  }
+
+  function paintList() {
+    const review = items.filter((c) => ledger[c.key] === 'review');
+    const open = items.filter((c) => !ledger[c.key]);
+    const safe = items.filter((c) => ledger[c.key] === 'safe');
+    const noted = notedCards();
+    const section = (title, list, empty, row = itemRow) => `<section class="list-section"><h3>${title} · ${list.length}</h3>${list.length ? list.map(row).join('') : `<p class="empty">${empty}</p>`}</section>`;
+    $('list').innerHTML = `<div class="review-list">
+        <div class="list-head"><h2>Review list</h2><span class="muted">Comment on the PR from each line link, then mark the item Safe.</span>${review.length || noted.length ? '<button id="copy-list">Copy as Markdown</button><button id="publish-review" title="Create a PENDING review on GitHub from these comments (g). Only you can see it until you submit it there.">Publish pending review <kbd>g</kbd></button>' : ''}
+          <p class="publish-status muted" id="publish-status" role="status"></p></div>
+        ${section('Your notes', noted, 'Press n on any card to write a note for this list.', noteRow)}
+        ${section('To review', review, 'Nothing marked for review.')}
+        ${open.length ? section('Still open', open, '') : ''}
+        ${section('Safe', safe, 'Nothing marked safe yet.')}
+      </div>`;
+    $('copy-list')?.addEventListener('click', (e) => copyList(review, noted, e.currentTarget));
+    $('publish-review')?.addEventListener('click', (e) => publishReview(review, noted, e.currentTarget, $('publish-status')));
+  }
+
+  // One PENDING review per PR, built from the review list. The local helper creates it with your gh login.
+  function reviewComments(review, noted) {
+    const cards = [...new Map([...review, ...noted].map((c) => [`${c.fi}.${c.ci}`, c])).values()];
+    const groups = new Map();
+    let skipped = 0;
+    for (const c of cards) {
+      const f = flat[c.fi];
+      const pr = prPage(f.step.url) ?? prPage(BOARD.url);
+      if (!pr) { skipped++; continue; }
+      if (!groups.has(pr)) groups.set(pr, { comments: [], lines: [] });
+      const group = groups.get(pr);
+      const a = anchorOf(c);
+      const text = noteOf(c) || (c.kind === 'check' ? c.note.concern : c.q.ask);
+      if (a?.path && a.line !== undefined) {
+        const multi = a.end !== undefined && a.end > a.line;
+        group.comments.push({
+          path: a.path,
+          line: multi ? a.end : a.line,
+          ...(multi ? { start_line: a.line } : {}),
+          side: a.side === 'old' ? 'LEFT' : 'RIGHT',
+          body: text,
+        });
+      } else {
+        group.lines.push(`- ${KIND[c.kind]} ${f.si + 1}.${f.ki + 1}: ${text}${a?.path ? ` (${whereOf(a)})` : ''}`);
+      }
+    }
+    return { groups, skipped };
+  }
+
+  async function publishReview(review, noted, button, status) {
+    const { groups, skipped } = reviewComments(review, noted);
+    const total = [...groups.values()].reduce((n, g) => n + g.comments.length + g.lines.length, 0);
+    if (total === 0) {
+      status.textContent = 'Nothing to publish: these cards have no GitHub PR link.';
+      return;
+    }
+    const plural = total === 1 ? '' : 's';
+    const scope = groups.size > 1 ? ` on ${groups.size} PRs (one review each)` : '';
+    if (!confirm(`Create PENDING review${groups.size > 1 ? 's' : ''} on GitHub with ${total} comment${plural}${scope}?\n\nOnly you can see ${groups.size > 1 ? 'them' : 'it'} until you submit ${groups.size > 1 ? 'them' : 'it'} on GitHub. Nothing is submitted by this button.`)) return;
+    button.disabled = true;
+    status.textContent = 'Publishing…';
+    // One PR at a time. A PR that fails (already has a pending review, or GitHub refuses) does not stop the others.
+    const results = [];
+    try {
+      for (const [pr, group] of groups) {
+        const [, repo, number] = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/.exec(pr);
+        const label = `${repo} #${number}`;
+        const body = group.lines.length ? ['Items without a line in the diff:', ...group.lines].join('\n') : '';
+        try {
+          const res = await fetch(`${HELPER.url}/pending-review`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ repo, pr: Number(number), body, comments: group.comments }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (res.status === 409) {
+            results.push(`${esc(label)}: ${esc(json.error)} <a class="where" href="${esc(json.url)}" target="_blank" rel="noopener">Open it ↗</a>`);
+            continue;
+          }
+          if (!res.ok) throw new Error(json.error || `helper answered ${res.status}`);
+          results.push(`<a class="where" href="${esc(json.url)}" target="_blank" rel="noopener">${esc(label)}: ${json.comments} comment${json.comments === 1 ? '' : 's'} ↗</a>`);
+        } catch (error) {
+          if (error instanceof TypeError) throw error;
+          results.push(`${esc(label)}: not published (${esc(error.message)})`);
+        }
+      }
+      status.innerHTML = `Pending on GitHub, only you can see ${groups.size > 1 ? 'them' : 'it'}: ${results.join(' · ')}${skipped ? ` <span class="muted">(${skipped} card${skipped > 1 ? 's' : ''} without a PR link skipped)</span>` : ''}`;
+    } catch (error) {
+      const before = results.length ? `Stopped after ${results.join(' · ')}. ` : '';
+      status.innerHTML = before + (error instanceof TypeError
+        ? `The helper is not running, so nothing was sent. Start it: <code>${esc(HELPER.install)}</code> (once, macOS: it then starts at login), or for this session only: <code>${esc(HELPER.command)}</code>`
+        : `Not published: ${esc(error.message)}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function copyList(review, noted, button) {
+    const inline = (s) => String(s).replace(/\s+/g, ' ').trim().replace(/([\\`*_[\]<>])/g, '\\$1');
+    const line = (c, box) => {
+      const f = flat[c.fi];
+      const a = anchorOf(c);
+      const whereText = whereOf(a);
+      const where = a?.href ? ` ([${inline(whereText || 'PR diff')}](${a.href}))` : whereText ? ` (${inline(whereText)})` : '';
+      const context = contextOf(c);
+      return `- ${box ? '[ ] ' : ''}**${KIND[c.kind]}** ${f.si + 1}.${f.ki + 1}: ${inline(context || f.sub.title)}${where}`;
+    };
+    const quote = (s) => s.replace(/^\s*\n/, '').trimEnd().split('\n').map((l) => `  > ${l}`).join('\n');
+    const parts = [inline(BOARD.title)];
+    if (review.length) parts.push('## To review\n\n' + review.map((c) => line(c, true)).join('\n'));
+    if (noted.length) parts.push('## Notes\n\n' + noted.map((c) => `${line(c, false)}\n\n${quote(noteOf(c))}`).join('\n\n'));
+    const text = parts.join('\n\n') + '\n';
+    const done = () => { button.textContent = 'Copied'; setTimeout(() => (button.textContent = 'Copy as Markdown'), 1500); };
+    navigator.clipboard?.writeText(text).then(done, fallback) ?? fallback();
+    function fallback() {
+      const t = document.createElement('textarea');
+      t.style.cssText = 'position:fixed;top:0;left:-9999px';
+      t.value = text;
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand('copy');
+      t.remove();
+      done();
+    }
+  }
+
+  function showList() {
+    closePicker();
+    view = 'list';
+    editing = false;
+    stage.classList.add('list-view');
+    clearTimeout(leaveTimer);
+    paintSidebar();
+    paintList();
+    scroll.scrollTop = 0;
+    history.replaceState(null, '', '#list');
+  }
+
+  function setMin(value) {
+    minimized = value;
+    if (value) editing = false;
+    paintNotes();
+    draw(false);
+  }
+
+  function goCard(j) {
+    const n = Math.max(0, Math.min(flat[cursor].cards.length - 1, j));
+    if (n === card) return;
+    card = n;
+    editing = false;
+    paintSidebar();
+    paintNotes();
+    lensNode();
+    lensLines(true);
+  }
+
+  let leaveTimer = 0;
+  function go(i, c = 0, edit = false) {
+    closePicker();
+    if (i >= flat.length) return showList();
+    const next = Math.max(0, i);
+    if (view === 'walk' && next === cursor && i !== cursor) return;
+    view = 'walk';
+    editing = edit;
+    stage.classList.remove('list-view');
+    cursor = next;
+    card = Math.min(c, flat[cursor].cards.length - 1);
+    minimized = false;
+    seen.add(cursor);
+    paintSidebar();
+    paintFiles();
+    paintNotes();
+    if (card > 0) requestAnimationFrame(() => lensLines(true));
+    history.replaceState(null, '', `#${flat[cursor].si + 1}.${flat[cursor].ki + 1}`);
+    diagram.classList.add('leaving');
+    clearTimeout(leaveTimer);
+    leaveTimer = setTimeout(() => { diagram.classList.remove('leaving'); draw(true); }, 180);
+  }
+
+  const THEMES = ['system', 'light', 'dark'];
+  let theme = document.documentElement.dataset.theme ?? 'system';
+  function paintTheme() {
+    const label = `Theme: ${theme[0].toUpperCase()}${theme.slice(1)} (t)`;
+    $('theme').innerHTML = THEME_ICONS[theme];
+    $('theme').title = label;
+    $('theme').setAttribute('aria-label', label);
+  }
+  function cycleTheme() {
+    theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+    if (theme === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+    try { theme === 'system' ? localStorage.removeItem('operator-review/theme') : localStorage.setItem('operator-review/theme', theme); } catch {}
+    paintTheme();
+  }
+  $('theme').onclick = cycleTheme;
+  paintTheme();
+
+  function closePicker() { picker.hidden = true; tab.setAttribute('aria-expanded', 'false'); }
+  tab.onclick = () => {
+    const open = picker.hidden;
+    picker.hidden = !open;
+    tab.setAttribute('aria-expanded', String(open));
+    if (open) picker.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
+  };
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.walk-dock')) closePicker(); });
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-go], [data-list], [data-jump], [data-edit], [data-mark]');
+    if (!t) return;
+    if (t.dataset.mark) mark(t.dataset.key, t.dataset.mark);
+    else if (t.dataset.jump || t.dataset.edit) { const [fi, ci] = (t.dataset.jump ?? t.dataset.edit).split('.').map(Number); go(fi, ci, Boolean(t.dataset.edit)); }
+    else if (t.hasAttribute('data-list')) showList();
+    else go(+t.dataset.go);
+  });
+  // One walk through every card: the cards of a substep in order, then the next substep. Past the last card, the review list.
+  function step(delta) {
+    if (view === 'list') {
+      if (delta < 0) go(flat.length - 1, flat[flat.length - 1].cards.length - 1);
+      return;
+    }
+    const n = card + delta;
+    if (n >= 0 && n < flat[cursor].cards.length) return goCard(n);
+    if (delta > 0) return cursor + 1 < flat.length ? go(cursor + 1, 0) : showList();
+    if (cursor > 0) go(cursor - 1, flat[cursor - 1].cards.length - 1);
+  }
+  $('prev').onclick = () => step(-1);
+  $('next').onclick = () => step(1);
+  const helpDialog = $('help-dialog');
+  const openHelp = () => { helpDialog.hidden = false; $('help-close').focus(); };
+  const closeHelp = () => { helpDialog.hidden = true; $('help').focus(); };
+  $('help').onclick = openHelp;
+  $('help-close').onclick = closeHelp;
+  helpDialog.addEventListener('click', (e) => { if (e.target === helpDialog) closeHelp(); });
+  addEventListener('keydown', (e) => {
+    if (!helpDialog.hidden) {
+      if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeHelp(); }
+      return;
+    }
+    if (e.target instanceof Element && e.target.closest('textarea, input')) {
+      if (e.key === 'Escape' && editing) { e.preventDefault(); toggleNote(); }
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    const walking = view === 'walk';
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && walking) step(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') step(-1);
+    else if (e.key === 's' && walking && current().key) mark(current().key, 'safe');
+    else if (e.key === 'r' && walking && current().key) mark(current().key, 'review');
+    else if (e.key === 'n' && walking) toggleNote();
+    else if (e.key === 'Escape' && !picker.hidden) closePicker();
+    else if (e.key === 'g' && view === 'list') $('publish-review')?.click();
+    else if (e.key === 't') cycleTheme();
+    else if (e.key === 'p' && walking) { clearTimeout(leaveTimer); diagram.classList.remove('leaving'); draw(true); }
+    else if (/^[1-9]$/.test(e.key) && +e.key <= STEPS.length) go(flat.findIndex((f) => f.si === +e.key - 1));
+    else if (e.key === '?') openHelp();
+    else return;
+    e.preventDefault();
+  });
+  let rz = 0;
+  addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (view === 'walk') draw(false); }, 150); });
+
+  const m = /^#(\d+)\.(\d+)$/.exec(location.hash);
+  if (m) { const i = flat.findIndex((f) => f.si === +m[1] - 1 && f.ki === +m[2] - 1); if (i >= 0) cursor = i; }
+  if (location.hash === '#list') showList();
+  else {
+    seen.add(cursor);
+    paintSidebar();
+    paintFiles();
+    paintNotes();
+    draw(true);
+  }
+})();
+</script>
+</body>
+</html>
